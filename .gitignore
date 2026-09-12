@@ -1,0 +1,23 @@
+# Gradle / 构建产物
+.gradle/
+build/
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 本地配置（含本机 SDK 路径）
+local.properties
+
+# 签名密钥 / 密码（绝不入库）
+*.keystore
+*.jks
+keystore.properties
+
+# 本地一键构建脚本（含本机路径）
+build.bat
+
+# IDE
+.idea/
+*.iml
+.DS_Store
