@@ -1,6 +1,6 @@
 # BBDroid
 
-单机 Android 应用：**B 站视频下载器 + FFmpeg 工具箱**（个人自用，无后端，无任何 API 密钥）。
+单机 Android 应用：**B 站视频下载器 + FFmpeg 工具箱**。
 
 ## 功能
 
