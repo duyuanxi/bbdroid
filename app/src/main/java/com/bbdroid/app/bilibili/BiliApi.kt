@@ -14,12 +14,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicLongArray
 
-// 全局下载取消开关（停止按钮）
+// 全局下载取消/暂停开关（停止按钮、暂停/继续按钮）
 object DownloadControl {
     @kotlin.jvm.Volatile
     var cancelled = false
-    fun reset() { cancelled = false }
+    @kotlin.jvm.Volatile
+    var paused = false
+    fun reset() { cancelled = false; paused = false }
     fun cancel() { cancelled = true }
+    fun pause() { paused = true }
+    fun resume() { paused = false }
 }
 
 object BiliApi {
@@ -180,7 +184,8 @@ object BiliApi {
         val ugc = data.optJSONObject("ugc_season")
         val seasonId = if (ugc != null) ugc.optLong("id", 0).toString() else ""
         val seasonTitle = if (ugc != null) ugc.optString("title", "") else ""
-        return VideoInfo(title, desc, pic, pubTime, bvid, aid, pages, seasonId, seasonTitle)
+        val owner = data.optJSONObject("owner")?.optString("name", "") ?: ""
+        return VideoInfo(title, desc, pic, pubTime, bvid, aid, pages, owner, seasonId, seasonTitle)
     }
 
     fun fetchTracks(aid: String, cid: String): Pair<List<VideoTrack>, List<AudioTrack>> {
@@ -260,6 +265,7 @@ object BiliApi {
                     var read = input.read(buf)
                     while (read != -1) {
                         if (DownloadControl.cancelled) throw Exception("已取消下载")
+                        while (DownloadControl.paused && !DownloadControl.cancelled) Thread.sleep(100)
                         out.write(buf, 0, read)
                         downloaded += read
                         onProgress?.invoke(downloaded, total)
@@ -303,6 +309,7 @@ object BiliApi {
                     var read = input.read(buf)
                     while (read != -1) {
                         if (DownloadControl.cancelled) throw Exception("已取消下载")
+                        while (DownloadControl.paused && !DownloadControl.cancelled) Thread.sleep(100)
                         out.write(buf, 0, read)
                         onRead?.invoke(read.toLong())
                         read = input.read(buf)

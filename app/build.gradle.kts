@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
 }
 
 // 从 keystore.properties 读取签名信息（该文件不入库，避免泄露密钥/密码）
@@ -66,6 +67,12 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.3.1")
     implementation("androidx.compose.material:material-icons-extended:1.7.6")
     implementation("androidx.documentfile:documentfile:1.0.1")
+
+    // 持久化：Room（历史/队列）+ DataStore（设置）
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // 网络：B站接口请求
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

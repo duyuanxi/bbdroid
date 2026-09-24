@@ -8,6 +8,7 @@ data class VideoInfo(
     val bvid: String,
     val aid: String,
     val pages: List<Page>,
+    val owner: String = "",
     val seasonId: String = "",
     val seasonTitle: String = "",
 )

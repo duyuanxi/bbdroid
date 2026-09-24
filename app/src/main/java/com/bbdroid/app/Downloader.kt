@@ -71,20 +71,22 @@ object Downloader {
             s.contains("ftyp") || s.contains("styp") || s.contains("moov") || s.contains("moof") || s.contains("mdat")
     }
 
-    // 下载封面、弹幕、字幕，保存到 Downloads/BBDroid/附赠（enabled=false 时跳过）
+    // 下载封面、弹幕、字幕，保存到 Downloads/BBDroid/附赠（按开关逐项跳过）
     suspend fun downloadExtras(
         context: Context,
         info: VideoInfo,
         cid: String,
         outputDir: File,
-        enabled: Boolean = true,
+        cover: Boolean = true,
+        danmaku: Boolean = true,
+        subtitle: Boolean = true,
         onProgress: (String) -> Unit,
     ): String = withContext(Dispatchers.IO) {
-        if (!enabled) return@withContext "未下载附赠内容"
+        if (!cover && !danmaku && !subtitle) return@withContext "未下载附赠内容"
         val base = sanitize(info.title)
         val msgs = mutableListOf<String>()
         // 封面
-        if (info.pic.isNotEmpty()) {
+        if (cover && info.pic.isNotEmpty()) {
             onProgress("下载封面...")
             try {
                 val f = File(outputDir, "cover.jpg")
@@ -94,30 +96,34 @@ object Downloader {
             } catch (e: Exception) {}
         }
         // 弹幕
-        onProgress("下载弹幕...")
-        try {
-            val dm = File(outputDir, "danmaku.xml")
-            BiliApi.downloadDanmaku(cid, dm)
-            msgs.add(Storage.saveToDownloads(context, dm, base + ".xml").display)
-            dm.delete()
-        } catch (e: Exception) {}
+        if (danmaku) {
+            onProgress("下载弹幕...")
+            try {
+                val dm = File(outputDir, "danmaku.xml")
+                BiliApi.downloadDanmaku(cid, dm)
+                msgs.add(Storage.saveToDownloads(context, dm, base + ".xml").display)
+                dm.delete()
+            } catch (e: Exception) {}
+        }
         // 字幕
-        onProgress("下载字幕...")
-        try {
-            val subs = BiliApi.fetchSubtitles(info.aid, cid)
-            for ((lan, u) in subs) {
-                val sj = File(outputDir, "sub.json")
-                BiliApi.downloadFile(u, sj)
-                val srt = BiliApi.subtitleJsonToSrt(sj.readText())
-                sj.delete()
-                if (srt.isNotEmpty()) {
-                    val sf = File(outputDir, "sub.srt")
-                    sf.writeText(srt)
-                    msgs.add(Storage.saveToDownloads(context, sf, base + "_" + lan + ".srt").display)
-                    sf.delete()
+        if (subtitle) {
+            onProgress("下载字幕...")
+            try {
+                val subs = BiliApi.fetchSubtitles(info.aid, cid)
+                for ((lan, u) in subs) {
+                    val sj = File(outputDir, "sub.json")
+                    BiliApi.downloadFile(u, sj)
+                    val srt = BiliApi.subtitleJsonToSrt(sj.readText())
+                    sj.delete()
+                    if (srt.isNotEmpty()) {
+                        val sf = File(outputDir, "sub.srt")
+                        sf.writeText(srt)
+                        msgs.add(Storage.saveToDownloads(context, sf, base + "_" + lan + ".srt").display)
+                        sf.delete()
+                    }
                 }
-            }
-        } catch (e: Exception) {}
+            } catch (e: Exception) {}
+        }
         if (msgs.isEmpty()) "无封面/弹幕/字幕" else msgs.joinToString(", ")
     }
 

@@ -3,16 +3,20 @@ package com.bbdroid.app
 import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 
 object History {
     data class Item(
+        val id: Long = 0,
         val title: String,
         val cover: String,
         val quality: String,
+        val size: Long = 0,
+        val path: String = "",
         val time: Long,
         val uri: String = "",
         val bvid: String = "",
@@ -21,46 +25,34 @@ object History {
     // 显示用的条目：item + 文件是否仍存在
     data class Entry(val item: Item, val exists: Boolean)
 
-    private const val PREFS = "bbdroid"
-    private const val KEY = "history"
-
-    fun load(context: Context): List<Item> {
-        val s = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, "[]") ?: "[]"
-        return try {
-            val arr = JSONArray(s)
-            val list = mutableListOf<Item>()
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                list.add(Item(
-                    o.optString("title"),
-                    o.optString("cover"),
-                    o.optString("quality"),
-                    o.optLong("time"),
-                    o.optString("uri"),
-                    o.optString("bvid"),
-                ))
+    // 观察历史（Room Flow，新增/删除自动刷新）
+    fun observeEntries(context: Context): Flow<List<Entry>> =
+        BbdroidDatabase.get(context).historyDao().observeAll()
+            .map { list ->
+                list.map { e ->
+                    Entry(e.toItem(), e.uri.isEmpty() || uriExists(context, e.uri))
+                }
             }
-            list
-        } catch (e: Exception) { emptyList() }
-    }
+            .flowOn(Dispatchers.IO)
 
-    // 加载并标注文件是否仍存在（uri 为空的老记录视为存在）
     suspend fun loadEntries(context: Context): List<Entry> = withContext(Dispatchers.IO) {
-        load(context).map { Entry(it, it.uri.isEmpty() || uriExists(context, it.uri)) }
+        BbdroidDatabase.get(context).historyDao().loadAll().map { e ->
+            Entry(e.toItem(), e.uri.isEmpty() || uriExists(context, e.uri))
+        }
     }
 
-    fun add(context: Context, item: Item) {
-        val list = load(context).toMutableList()
-        list.removeAll { it.title == item.title && it.quality == item.quality }
-        list.add(0, item)
-        if (list.size > 50) list.subList(50, list.size).clear()
-        save(context, list)
+    suspend fun add(context: Context, item: Item) {
+        withContext(Dispatchers.IO) {
+            BbdroidDatabase.get(context).historyDao().insert(item.toEntity())
+        }
     }
 
-    fun remove(context: Context, item: Item) {
-        val list = load(context).toMutableList()
-        list.removeAll { it.title == item.title && it.time == item.time }
-        save(context, list)
+    suspend fun remove(context: Context, item: Item) {
+        withContext(Dispatchers.IO) {
+            val dao = BbdroidDatabase.get(context).historyDao()
+            if (item.id > 0) dao.deleteById(item.id)
+            else dao.deleteByTitleTime(item.title, item.time)
+        }
     }
 
     // 删除本地视频文件
@@ -83,19 +75,28 @@ object History {
             if (stream == null) false else { stream.close(); true }
         } catch (e: Exception) { false }
     }
-
-    private fun save(context: Context, list: List<Item>) {
-        val arr = JSONArray()
-        for (it in list) {
-            val o = JSONObject()
-            o.put("title", it.title)
-            o.put("cover", it.cover)
-            o.put("quality", it.quality)
-            o.put("time", it.time)
-            o.put("uri", it.uri)
-            o.put("bvid", it.bvid)
-            arr.put(o)
-        }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, arr.toString()).commit()
-    }
 }
+
+fun History.Item.toEntity() = HistoryEntity(
+    id = id,
+    title = title,
+    cover = cover,
+    quality = quality,
+    size = size,
+    path = path,
+    time = time,
+    uri = uri,
+    bvid = bvid,
+)
+
+fun HistoryEntity.toItem() = History.Item(
+    id = id,
+    title = title,
+    cover = cover,
+    quality = quality,
+    size = size,
+    path = path,
+    time = time,
+    uri = uri,
+    bvid = bvid,
+)

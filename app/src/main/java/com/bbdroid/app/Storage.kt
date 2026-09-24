@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.flow.first
 import java.io.File
 
 data class SavedFile(val display: String, val uri: Uri?)
@@ -58,20 +59,6 @@ object Storage {
         }
     }
 
-    // 自定义保存目录（SAF tree Uri）
-    private const val KEY_SAVE_DIR = "save_dir_uri"
-
-    fun getSaveDir(context: Context): String =
-        context.getSharedPreferences("bbdroid", Context.MODE_PRIVATE).getString(KEY_SAVE_DIR, "") ?: ""
-
-    fun setSaveDir(context: Context, uri: String) {
-        context.getSharedPreferences("bbdroid", Context.MODE_PRIVATE).edit().putString(KEY_SAVE_DIR, uri).commit()
-    }
-
-    fun clearSaveDir(context: Context) {
-        context.getSharedPreferences("bbdroid", Context.MODE_PRIVATE).edit().remove(KEY_SAVE_DIR).commit()
-    }
-
     // 保存视频到默认的专属目录（Download/BBDroid/视频，独立于相册）
     fun saveVideoDefault(context: Context, file: File, displayName: String): SavedFile {
         if (Build.VERSION.SDK_INT >= 29) {
@@ -94,9 +81,9 @@ object Storage {
         return SavedFile(dest.absolutePath, Uri.fromFile(dest))
     }
 
-    // 保存视频：有自定义目录则写自定义目录，否则写专属视频目录
-    fun saveVideo(context: Context, file: File, displayName: String): SavedFile {
-        val dir = getSaveDir(context)
+    // 保存视频：有自定义目录则写自定义目录，否则写专属视频目录（自定义目录来自 DataStore）
+    suspend fun saveVideo(context: Context, file: File, displayName: String): SavedFile {
+        val dir = SettingsStore.saveDir(context)
         if (dir.isEmpty()) return saveVideoDefault(context, file, displayName)
         return try {
             val tree = DocumentFile.fromTreeUri(context, Uri.parse(dir))

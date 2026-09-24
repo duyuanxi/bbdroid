@@ -3,33 +3,47 @@ package com.bbdroid.app
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +60,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -77,20 +92,24 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
     var parseJob by remember { mutableStateOf<Job?>(null) }
     var parsed by remember { mutableStateOf<BiliApi.ParsedData?>(null) }
     var selectedVideoIdx by remember { mutableStateOf(0) }
+    var cover by remember { mutableStateOf<Bitmap?>(null) }
+    var collectionTitle by remember { mutableStateOf("") }
+    var collectionItems by remember { mutableStateOf<List<BiliApi.CollectionItem>>(emptyList()) }
+
+    var extraDanmaku by remember { mutableStateOf(true) }
+    var extraCover by remember { mutableStateOf(true) }
+    var extraSubtitle by remember { mutableStateOf(true) }
+
     var downloadStatus by DownloadSession.downloadStatusState
     var downloading by DownloadSession.downloadingState
     var progressPct by DownloadSession.progressPctState
     var progressInfo by DownloadSession.progressInfoState
     var batchStatus by DownloadSession.batchStatusState
     var batchRunning by DownloadSession.batchRunningState
-    var collectionTitle by remember { mutableStateOf("") }
-    var collectionItems by remember { mutableStateOf<List<BiliApi.CollectionItem>>(emptyList()) }
     var collectionStatus by DownloadSession.collectionStatusState
     var collectionRunning by DownloadSession.collectionRunningState
-    var cover by remember { mutableStateOf<Bitmap?>(null) }
     var openUri by DownloadSession.openUriState
     var openName by DownloadSession.openNameState
-    var downloadExtras by remember { mutableStateOf(true) }
     var showDownloadDialog by DownloadSession.showDialogState
     var dialogMsg by DownloadSession.dialogMsgState
     var dialogUri by DownloadSession.dialogUriState
@@ -98,16 +117,18 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
     var downloadJob by DownloadSession.downloadJobState
     var batchJob by DownloadSession.batchJobState
     var collectionJob by DownloadSession.collectionJobState
+
+    var paused by remember { mutableStateOf(false) }
+    var showStopConfirm by remember { mutableStateOf(false) }
     var autoDownload by remember { mutableStateOf(false) }
 
-    var loginStatus by remember { mutableStateOf("未登录") }
+    // 登录态
     var userName by remember { mutableStateOf("") }
     var userFace by remember { mutableStateOf<Bitmap?>(null) }
 
     fun refreshLogin() {
         val c = Auth.load(context)
         BiliApi.cookie = c
-        loginStatus = if (Auth.isLoggedIn(c)) "已登录" else "未登录"
         if (Auth.isLoggedIn(c)) {
             scope.launch {
                 val u = withContext(Dispatchers.IO) { runCatching { BiliApi.fetchUserInfo() }.getOrNull() }
@@ -125,7 +146,6 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(ob) }
     }
 
-    val webLoginLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshLogin() }
     val qrLoginLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshLogin() }
 
     val doDownload: () -> Unit = {
@@ -167,12 +187,17 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
                     val name = sanitizeFilename(d.info.title) + ".mp4"
                     val stored = Storage.saveVideo(context, merged, name)
                     val savedTo = stored.display
+                    val size = merged.length()
                     openUri = stored.uri; openName = name
                     merged.delete()
-                    History.add(context, History.Item(d.info.title, d.info.pic, video.dfn, System.currentTimeMillis(), stored.uri?.toString() ?: "", d.info.bvid))
+                    History.add(context, History.Item(
+                        title = d.info.title, cover = d.info.pic, quality = video.dfn,
+                        size = size, path = savedTo, time = System.currentTimeMillis(),
+                        uri = stored.uri?.toString() ?: "", bvid = d.info.bvid,
+                    ))
                     val cid = d.info.pages.firstOrNull()?.cid ?: ""
                     okMsg = if (cid.isNotEmpty()) {
-                        val extra = Downloader.downloadExtras(context, d.info, cid, context.cacheDir, enabled = downloadExtras) { p -> downloadStatus = p }
+                        val extra = Downloader.downloadExtras(context, d.info, cid, context.cacheDir, cover = extraCover, danmaku = extraDanmaku, subtitle = extraSubtitle) { p -> downloadStatus = p }
                         "✅ 视频: " + savedTo + "；附赠: " + extra
                     } else "✅ 已保存 " + savedTo
                     downloadStatus = okMsg!!
@@ -200,6 +225,10 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
                 var done = 0
                 DownloadSession.clearTasks()
                 DownloadSession.upsertTask(DownloadTask(key = "batch", title = d.info.title, progress = 0f, status = "0/" + pages.size, isParent = true, childTotal = pages.size))
+                // 队列持久化
+                val dao = BbdroidDatabase.get(context).queueDao()
+                dao.clear()
+                dao.insertAll(pages.map { QueueEntity(title = d.info.title + " P" + it.index, aid = it.aid, cid = it.cid, bvid = d.info.bvid, quality = "最高清", status = "PENDING") })
                 withContext(Dispatchers.IO) {
                     for ((idx, page) in pages.withIndex()) {
                         val childKey = "batch-" + idx
@@ -220,11 +249,14 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
                             })
                         val name = sanitizeFilename(d.info.title) + "_P" + page.index + ".mp4"
                         DownloadSession.updateTask(childKey, progress = 1f, status = "保存中")
-                        Storage.saveVideo(context, m, name); m.delete(); done++
+                        val stored = Storage.saveVideo(context, m, name); val size = m.length(); m.delete()
+                        History.add(context, History.Item(title = d.info.title + " P" + page.index, cover = d.info.pic, quality = v.dfn, size = size, path = stored.display, time = System.currentTimeMillis(), uri = stored.uri?.toString() ?: "", bvid = d.info.bvid))
+                        done++
                         DownloadSession.updateTask("batch", progress = done.toFloat() / pages.size, status = done.toString() + "/" + pages.size)
                     }
                 }
                 DownloadSession.clearTasks()
+                BbdroidDatabase.get(context).queueDao().clear()
                 batchStatus = "✅ 批量完成 " + done + " 个"
                 dialogMsg = batchStatus; dialogUri = null; dialogName = ""
                 showDownloadDialog = true
@@ -244,6 +276,9 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
                 var done = 0
                 DownloadSession.clearTasks()
                 DownloadSession.upsertTask(DownloadTask(key = "collection", title = collectionTitle.ifEmpty { "合集下载" }, progress = 0f, status = "0/" + items.size, isParent = true, childTotal = items.size))
+                val dao = BbdroidDatabase.get(context).queueDao()
+                dao.clear()
+                dao.insertAll(items.map { QueueEntity(title = it.title, aid = it.aid, cid = it.cid, bvid = "", quality = "最高清", status = "PENDING") })
                 withContext(Dispatchers.IO) {
                     for ((idx, item) in items.withIndex()) {
                         val childKey = "collection-" + idx
@@ -268,11 +303,14 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
                             })
                         val name = sanitizeFilename(item.title) + ".mp4"
                         DownloadSession.updateTask(childKey, progress = 1f, status = "保存中")
-                        Storage.saveVideo(context, m, name); m.delete(); done++
+                        val stored = Storage.saveVideo(context, m, name); val size = m.length(); m.delete()
+                        History.add(context, History.Item(title = item.title, cover = "", quality = v.dfn, size = size, path = stored.display, time = System.currentTimeMillis(), uri = stored.uri?.toString() ?: "", bvid = ""))
+                        done++
                         DownloadSession.updateTask("collection", progress = done.toFloat() / items.size, status = done.toString() + "/" + items.size)
                     }
                 }
                 DownloadSession.clearTasks()
+                BbdroidDatabase.get(context).queueDao().clear()
                 collectionStatus = "✅ 合集完成 " + done + " 个"
                 dialogMsg = collectionStatus; dialogUri = null; dialogName = ""
                 showDownloadDialog = true
@@ -288,14 +326,15 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
 
     val stopAll: () -> Unit = {
         DownloadControl.cancel()
+        DownloadControl.resume()
         downloadJob?.cancel()
         batchJob?.cancel()
         collectionJob?.cancel()
         downloading = false; batchRunning = false; collectionRunning = false
+        paused = false
         downloadStatus = "⏹ 已停止"; batchStatus = ""; collectionStatus = ""
     }
 
-    // 解析（解析完成后若来自重新下载则自动开始下载）
     fun parseUrl(url: String) {
         biliInput = url
         keyboardController?.hide()
@@ -312,13 +351,12 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
                     } else {
                         val d = BiliApi.parseDetailed(url)
                         if (!isActive) return@withContext
-                        parsed = d; selectedVideoIdx = 0; biliResult = formatParsed(d)
+                        parsed = d; selectedVideoIdx = 0; biliResult = ""
                         if (d.info.pic.isNotEmpty()) cover = ImageUtil.load(d.info.pic)
                         if (d.info.seasonId.isNotEmpty()) {
                             val (ct, ci) = BiliApi.fetchCollection("8", d.info.seasonId)
                             if (!isActive) return@withContext
                             collectionTitle = ct; collectionItems = ci
-                            biliResult = biliResult + "\n\n[合集] " + ct + "（共 " + ci.size + " 个视频）"
                         }
                     }
                 } catch (e: Exception) {
@@ -330,7 +368,6 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
         }
     }
 
-    // 历史记录触发重新下载
     LaunchedEffect(ReDownloadRequest.id) {
         if (ReDownloadRequest.id > 0 && ReDownloadRequest.bvid.isNotEmpty()) {
             autoDownload = true
@@ -338,130 +375,148 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
         }
     }
 
-    Column(modifier = modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // 登录卡片
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (userFace != null) Image(userFace!!.asImageBitmap(), contentDescription = "头像", modifier = Modifier.size(40.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-                Column(Modifier.weight(1f)) {
-                    Text(if (Auth.isLoggedIn(BiliApi.cookie)) userName.ifEmpty { "已登录" } else "未登录", style = MaterialTheme.typography.titleSmall)
-                    Text(if (Auth.isLoggedIn(BiliApi.cookie)) "已解锁高清/大会员内容" else "登录后解锁高清/番剧", style = MaterialTheme.typography.bodySmall)
-                }
-                if (!Auth.isLoggedIn(BiliApi.cookie)) {
-                    GlassButton(onClick = { qrLoginLauncher.launch(Intent(context, QrLoginActivity::class.java)) }, filled = false) { Text("扫码登录") }
-                }
-            }
-        }
+    val loggedIn = Auth.isLoggedIn(BiliApi.cookie)
 
-        // 输入
-        OutlinedTextField(value = biliInput, onValueChange = { biliInput = it }, label = { Text("粘贴 B站链接 / BV号 / av号") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        GlassButton(enabled = biliInput.isNotBlank(), onClick = {
-            if (biliRunning) {
-                parseJob?.cancel()
-                biliRunning = false
-                biliResult = "已停止解析"
-            } else {
-                keyboardController?.hide()
-                parseJob = scope.launch {
-                    biliRunning = true; biliResult = "解析中…"; parsed = null; collectionItems = emptyList(); cover = null
-                    downloadStatus = ""; batchStatus = ""; collectionStatus = ""
-                    withContext(Dispatchers.IO) {
-                        try {
-                            val list = BiliApi.detectAndFetchList(biliInput)
-                            if (!isActive) return@withContext
-                            if (list != null) {
-                                val (t, items) = list; collectionTitle = t; collectionItems = items
-                                biliResult = "列表: " + t + "（共 " + items.size + " 个视频）"
-                            } else {
-                                val d = BiliApi.parseDetailed(biliInput)
-                                if (!isActive) return@withContext
-                                parsed = d; selectedVideoIdx = 0; biliResult = formatParsed(d)
-                                if (d.info.pic.isNotEmpty()) cover = ImageUtil.load(d.info.pic)
-                                if (d.info.seasonId.isNotEmpty()) {
-                                    val (ct, ci) = BiliApi.fetchCollection("8", d.info.seasonId)
-                                    if (!isActive) return@withContext
-                                    collectionTitle = ct; collectionItems = ci
-                                    biliResult = biliResult + "\n\n[合集] " + ct + "（共 " + ci.size + " 个视频）"
-                                }
-                            }
-                        } catch (e: Exception) {
-                            if (isActive) { parsed = null; collectionItems = emptyList(); biliResult = "❌ " + (e.message ?: e.toString()) }
-                        }
+    Column(
+        modifier = modifier.padding(16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // 账号行（紧凑）
+        LoginRow(userFace = userFace, loggedIn = loggedIn, userName = userName, onLogin = { qrLoginLauncher.launch(Intent(context, QrLoginActivity::class.java)) })
+
+        // 链接解析卡
+        Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
+            Row(
+                Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = biliInput,
+                    onValueChange = { biliInput = it },
+                    label = { Text("粘贴链接 / BV号 / av号") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                FilledTonalButton(
+                    enabled = biliInput.isNotBlank(),
+                    onClick = {
+                        if (biliRunning) { parseJob?.cancel(); biliRunning = false; biliResult = "已停止解析" }
+                        else parseUrl(biliInput)
                     }
-                    if (isActive) biliRunning = false
-                }
-            }
-        }) { Text(if (biliRunning) "停止解析" else "解析") }
-
-        val busy = downloading || batchRunning || collectionRunning || biliRunning
-        if (busy) {
-            if (downloading && progressPct >= 0f) {
-                LinearProgressIndicator(progress = { progressPct }, modifier = Modifier.fillMaxWidth())
-                if (progressInfo.isNotEmpty()) Text(progressInfo, style = MaterialTheme.typography.bodySmall)
-            } else {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                ) { Text(if (biliRunning) "停止" else "解析") }
             }
         }
 
-        // 停止按钮
-        if (downloading || batchRunning || collectionRunning) {
-            GlassButton(onClick = { stopAll() }, modifier = Modifier.fillMaxWidth()) { Text("⏹ 停止下载") }
-        }
-
-        // 解析结果
+        // 解析结果卡
         val d = parsed
         if (d != null) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (cover != null) Image(cover!!.asImageBitmap(), contentDescription = "封面", modifier = Modifier.size(90.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
-                    Column(Modifier.weight(1f)) {
-                        Text(d.info.title, style = MaterialTheme.typography.titleSmall)
-                        Text(d.info.bvid + " · " + d.info.pages.size + " 个分P", style = MaterialTheme.typography.bodySmall)
+            Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (cover != null) {
+                        Image(
+                            cover!!.asImageBitmap(),
+                            contentDescription = "封面",
+                            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop,
+                        )
                     }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(d.info.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        val totalDur = d.info.pages.sumOf { it.duration }
+                        val meta = listOfNotNull(
+                            d.info.owner.ifEmpty { null },
+                            if (totalDur > 0) fmtDuration(totalDur) else null,
+                        ).joinToString(" · ")
+                        if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    HorizontalDivider()
+                    // 清晰度 2 列 FilterChip 网格
+                    Text("清晰度", style = MaterialTheme.typography.titleSmall)
+                    QualityGrid(videos = d.videos, selectedIdx = selectedVideoIdx, enabled = !downloading, onSelect = { selectedVideoIdx = it })
+                    // 附赠选项
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        ExtraCheck("弹幕", extraDanmaku, { extraDanmaku = it })
+                        ExtraCheck("封面", extraCover, { extraCover = it })
+                        ExtraCheck("字幕", extraSubtitle, { extraSubtitle = it })
+                    }
+                    // 主按钮 + 批量队列
+                    Button(
+                        enabled = !downloading && d.audios.isNotEmpty(),
+                        onClick = { if (Build.VERSION.SDK_INT < 29) permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else doDownload() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(if (downloading) "下载中…" else "下载并合并") }
+                    OutlinedButton(
+                        enabled = !batchRunning && !collectionRunning && !downloading,
+                        onClick = {
+                            when {
+                                collectionItems.isNotEmpty() -> doCollectionDownload()
+                                d.info.pages.size > 1 -> doBatchDownload()
+                                else -> doDownload()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("加入批量队列") }
                 }
             }
-            val selVideo = d.videos.getOrNull(selectedVideoIdx)
-            GlassButton(
-                enabled = !downloading && d.audios.isNotEmpty(),
-                onClick = { if (Build.VERSION.SDK_INT < 29) permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) else doDownload() },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text((if (downloading) "下载中…" else "⬇ 下载并合并") + " [" + (selVideo?.dfn ?: "最高清") + "]") }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Checkbox(checked = downloadExtras, onCheckedChange = { downloadExtras = it }, enabled = !downloading)
-                Text("下载附赠内容（封面/弹幕/字幕）", style = MaterialTheme.typography.bodySmall)
-            }
-            // 合集下载也放在上方（单视频属于合集时）
-            if (collectionItems.isNotEmpty()) {
-                GlassButton(
-                    enabled = !collectionRunning && !downloading,
-                    onClick = { doCollectionDownload() },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(if (collectionRunning) "合集下载中…" else "📂 下载整个合集 (" + collectionItems.size + ")") }
-                if (collectionStatus.isNotEmpty()) Text(collectionStatus, style = MaterialTheme.typography.bodySmall)
-            }
-            Text("选择清晰度（默认选最高清）", style = MaterialTheme.typography.titleSmall)
-            d.videos.forEachIndexed { i, v ->
-                val label = v.dfn + "  " + v.resolution + "  " + v.codecs
-                if (i == selectedVideoIdx) GlassButton(enabled = !downloading, onClick = { selectedVideoIdx = i }, modifier = Modifier.fillMaxWidth()) { Text(label + "  ✓") }
-                else GlassButton(enabled = !downloading, onClick = { selectedVideoIdx = i }, modifier = Modifier.fillMaxWidth(), filled = false) { Text(label) }
-            }
-            if (d.info.pages.size > 1) GlassButton(enabled = !batchRunning && !downloading, onClick = { doBatchDownload() }) { Text(if (batchRunning) "批量中…" else "批量下载 " + d.info.pages.size + " 个分P") }
-            if (downloadStatus.isNotEmpty()) Text(downloadStatus, style = MaterialTheme.typography.bodySmall)
-            // 打开已下载的视频
-            if (openUri != null) {
-                GlassButton(onClick = { openFile(context, openUri!!, openName) }, modifier = Modifier.fillMaxWidth()) { Text("打开视频 ▶") }
-            }
-            if (batchStatus.isNotEmpty()) Text(batchStatus, style = MaterialTheme.typography.bodySmall)
         }
 
-        // 合集下载（纯列表，无单视频解析结果时显示在下方）
+        // 纯合集/列表（无单视频解析结果）
         if (collectionItems.isNotEmpty() && parsed == null) {
-            HorizontalDivider()
-            Text("合集/列表: " + collectionTitle + "（" + collectionItems.size + " 个）", style = MaterialTheme.typography.titleSmall)
-            GlassButton(enabled = !collectionRunning && !downloading, onClick = { doCollectionDownload() }) { Text(if (collectionRunning) "下载中…" else "下载整个合集") }
-            if (collectionStatus.isNotEmpty()) Text(collectionStatus, style = MaterialTheme.typography.bodySmall)
+            Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(collectionTitle, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("共 " + collectionItems.size + " 个视频", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(
+                        enabled = !collectionRunning && !downloading,
+                        onClick = { doCollectionDownload() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(if (collectionRunning) "合集下载中…" else "下载整个合集") }
+                    if (collectionStatus.isNotEmpty()) Text(collectionStatus, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
-        if (biliResult.isNotEmpty() && parsed == null && collectionItems.isEmpty()) Text(biliResult, style = MaterialTheme.typography.bodySmall)
+
+        // 进行中任务卡（单集）
+        if (downloading) {
+            InProgressCard(
+                title = d?.info?.title ?: "下载中",
+                pct = progressPct,
+                info = progressInfo,
+                paused = paused,
+                onTogglePause = {
+                    paused = !paused
+                    if (paused) DownloadControl.pause() else DownloadControl.resume()
+                },
+                onStop = { showStopConfirm = true },
+            )
+        }
+
+        // 批量任务卡
+        if (batchRunning || collectionRunning) {
+            BatchTaskCard(tasks = DownloadSession.tasks, status = if (batchRunning) batchStatus else collectionStatus, onStop = { showStopConfirm = true })
+        }
+
+        // 打开视频
+        if (openUri != null) {
+            OutlinedButton(onClick = { openFile(context, openUri!!, openName) }, modifier = Modifier.fillMaxWidth()) { Text("打开视频 ▶") }
+        }
+
+        // 状态 / 错误
+        if (biliResult.isNotEmpty() && parsed == null && collectionItems.isEmpty()) {
+            Text(biliResult, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+    }
+
+    // 停止确认
+    if (showStopConfirm) {
+        AlertDialog(
+            onDismissRequest = { showStopConfirm = false },
+            title = { Text("停止下载") },
+            text = { Text("确定要停止当前下载吗？已下载的部分不会被删除。") },
+            confirmButton = { TextButton(onClick = { showStopConfirm = false; stopAll() }) { Text("停止") } },
+            dismissButton = { TextButton(onClick = { showStopConfirm = false }) { Text("取消") } },
+        )
     }
 
     // 下载完成弹窗
@@ -481,6 +536,124 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
     }
 }
 
+// ---------- 子组件 ----------
+
+@Composable
+private fun LoginRow(userFace: Bitmap?, loggedIn: Boolean, userName: String, onLogin: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (userFace != null) {
+            Image(userFace.asImageBitmap(), contentDescription = "头像", modifier = Modifier.size(36.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+        } else {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(if (loggedIn) userName.ifEmpty { "已登录" } else "未登录", style = MaterialTheme.typography.titleSmall)
+            Text(if (loggedIn) "已解锁高清/番剧" else "登录解锁高清/番剧", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (!loggedIn) {
+            FilledTonalButton(onClick = onLogin) { Text("登录") }
+        }
+    }
+}
+
+@Composable
+private fun QualityGrid(videos: List<com.bbdroid.app.bilibili.VideoTrack>, selectedIdx: Int, enabled: Boolean, onSelect: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        videos.chunked(2).forEach { rowItems ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                rowItems.forEach { v ->
+                    val i = videos.indexOf(v)
+                    FilterChip(
+                        selected = i == selectedIdx,
+                        onClick = { onSelect(i) },
+                        enabled = enabled,
+                        label = { Text(v.dfn, maxLines = 1) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (rowItems.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExtraCheck(label: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+        Checkbox(checked = checked, onCheckedChange = onToggle)
+        Text(label, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun InProgressCard(title: String, pct: Float, info: String, paused: Boolean, onTogglePause: () -> Unit, onStop: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                IconButton(onClick = onTogglePause) {
+                    Icon(if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, contentDescription = if (paused) "继续" else "暂停")
+                }
+                TextButton(onClick = onStop) { Text("停止", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            if (pct >= 0f) {
+                LinearProgressIndicator(progress = { pct.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = BrandPink)
+                if (info.isNotEmpty()) Text(info, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = BrandPink)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BatchTaskCard(tasks: List<DownloadTask>, status: String, onStop: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("批量队列", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = onStop) { Text("停止", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            if (status.isNotEmpty()) Text(status, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            tasks.filter { it.parentKey == null }.forEach { p ->
+                if (p.isParent) {
+                    Text("📦 " + p.title, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    LinearProgressIndicator(progress = { p.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = BrandPink)
+                }
+                tasks.filter { it.parentKey == p.key }.forEach { c -> ChildTaskRow(c) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChildTaskRow(task: DownloadTask) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 竖向连接线
+        Box(
+            Modifier
+                .width(2.dp)
+                .height(28.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+        Column(Modifier.weight(1f)) {
+            Text("└ " + task.title, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (task.progress >= 0f) {
+                LinearProgressIndicator(progress = { task.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = BrandPink)
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = BrandPink)
+            }
+        }
+        Text(
+            if (task.progress >= 0f) (task.progress * 100).toInt().toString() + "%" else task.status,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+// ---------- 工具 ----------
+
 fun shareVideo(context: Context, uri: Uri, name: String) {
     try {
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -499,7 +672,6 @@ fun openFile(context: Context, uri: Uri, name: String) {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.startActivity(intent)
     } catch (e: Exception) {
-        // 没有播放器时回退到文件管理器
         try {
             val i = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "video/*")
@@ -527,8 +699,8 @@ private fun fmtEta(seconds: Double): String {
     }
 }
 
-private fun formatParsed(d: BiliApi.ParsedData): String {
-    val sb = StringBuilder()
-    sb.append("BV: ").append(d.info.bvid).append("  aid: ").append(d.info.aid).append("  分P: ").append(d.info.pages.size)
-    return sb.toString()
+private fun fmtDuration(seconds: Int): String {
+    if (seconds <= 0) return ""
+    val h = seconds / 3600; val m = (seconds % 3600) / 60; val s = seconds % 60
+    return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s) else String.format(Locale.US, "%d:%02d", m, s)
 }

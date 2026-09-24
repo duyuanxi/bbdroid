@@ -5,31 +5,39 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -37,11 +45,14 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,77 +62,57 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HistoryTab(context: Context, modifier: Modifier = Modifier, isVisible: Boolean = true) {
+fun HistoryTab(context: Context, modifier: Modifier = Modifier, onGoDownload: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var history by remember { mutableStateOf<List<History.Entry>>(emptyList()) }
-    var actionTarget by remember { mutableStateOf<History.Entry?>(null) }
+    val entries by History.observeEntries(context).collectAsState(initial = emptyList())
+    var selected by remember { mutableStateOf<History.Entry?>(null) }
     var deleteTarget by remember { mutableStateOf<History.Entry?>(null) }
     var deleteLocal by remember { mutableStateOf(false) }
 
-    LaunchedEffect(isVisible) {
-        if (isVisible) history = History.loadEntries(context)
-    }
-
-    Column(
-        modifier = modifier
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("下载历史", style = MaterialTheme.typography.titleMedium)
-
-        // 进行中的下载任务（含批量/合集层级进度）
-        val tasks = DownloadSession.tasks
-        if (tasks.isNotEmpty()) {
-            Text("正在下载", style = MaterialTheme.typography.titleSmall)
-            tasks.filter { it.parentKey == null }.forEach { p ->
-                DownloadTaskRow(p, indent = false)
-                tasks.filter { it.parentKey == p.key }.forEach { c -> DownloadTaskRow(c, indent = true) }
-            }
-            HorizontalDivider()
-        }
-
-        if (history.isEmpty() && tasks.isEmpty()) {
-            Text("暂无下载记录", style = MaterialTheme.typography.bodyMedium)
-            return@Column
-        }
-
-        history.forEach { e ->
-            key(e.item.title, e.item.quality, e.item.time) {
-                SwipeableHistoryCard(
-                    entry = e,
-                    onClick = { actionTarget = e },
-                    onSwipeDelete = { deleteTarget = e; deleteLocal = false },
-                )
+        // 标题行
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("下载历史", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text(entries.size.toString() + " 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-    }
 
-    // 点击卡片：操作弹窗
-    actionTarget?.let { e ->
-        AlertDialog(
-            onDismissRequest = { actionTarget = null },
-            title = { Text(e.item.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (e.item.bvid.isNotEmpty()) {
-                        TextButton(onClick = { ReDownloadRequest.request(e.item.bvid); actionTarget = null }) { Text("重新下载") }
-                    }
-                    if (e.exists && e.item.uri.isNotEmpty()) {
-                        TextButton(onClick = { shareVideo(context, Uri.parse(e.item.uri), e.item.title); actionTarget = null }) { Text("分享") }
-                    }
-                    if (e.exists && e.item.uri.isNotEmpty()) {
-                        TextButton(onClick = { openFile(context, Uri.parse(e.item.uri), e.item.title); actionTarget = null }) { Text("打开") }
-                    }
-                    TextButton(onClick = { deleteTarget = e; deleteLocal = false; actionTarget = null }) { Text("删除") }
+        if (entries.isEmpty()) {
+            item {
+                EmptyHistory(onGoDownload)
+            }
+        } else {
+            items(entries, key = { it.item.id to it.item.time }) { e ->
+                key(e.item.id, e.item.time) {
+                    SwipeableHistoryCard(
+                        entry = e,
+                        onClick = { selected = e },
+                        onSwipeDelete = { deleteTarget = e; deleteLocal = false },
+                    )
                 }
-            },
-            confirmButton = { TextButton(onClick = { actionTarget = null }) { Text("取消") } },
-        )
+            }
+        }
     }
 
-    // 删除确认弹窗
+    // 详情底部抽屉
+    selected?.let { e ->
+        ModalBottomSheet(
+            onDismissRequest = { selected = null },
+            shape = DialogShape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            DetailSheet(context, e, onClose = { selected = null }, onDelete = { selected = null; deleteTarget = e; deleteLocal = false })
+        }
+    }
+
+    // 删除确认
     deleteTarget?.let { t ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
@@ -142,41 +133,25 @@ fun HistoryTab(context: Context, modifier: Modifier = Modifier, isVisible: Boole
             confirmButton = {
                 TextButton(onClick = {
                     if (deleteLocal && t.item.uri.isNotEmpty()) History.deleteLocalFile(context, t.item.uri)
-                    History.remove(context, t.item)
+                    scope.launch { History.remove(context, t.item) }
                     deleteTarget = null
-                    scope.launch { history = History.loadEntries(context) }
                 }) { Text("删除") }
             },
-            dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) { Text("取消") }
-            }
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("取消") } },
         )
     }
 }
 
 @Composable
-private fun DownloadTaskRow(task: DownloadTask, indent: Boolean) {
-    Card(modifier = Modifier.fillMaxWidth().padding(start = if (indent) 20.dp else 0.dp)) {
-        Row(
-            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Column(Modifier.weight(1f)) {
-                val prefix = if (task.isParent) "📦 " else if (indent) "└ " else ""
-                Text(prefix + task.title, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(task.status, style = MaterialTheme.typography.labelSmall)
-            }
-            Text(
-                if (task.progress >= 0f) (task.progress * 100).toInt().toString() + "%" else "…",
-                style = MaterialTheme.typography.labelSmall
-            )
-        }
-        if (task.progress >= 0f) {
-            LinearProgressIndicator(progress = { task.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-        } else {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        }
+private fun EmptyHistory(onGoDownload: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(Icons.Filled.History, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("暂无下载记录", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FilledTonalButton(onClick = onGoDownload) { Text("去下载") }
     }
 }
 
@@ -197,11 +172,18 @@ private fun SwipeableHistoryCard(entry: History.Entry, onClick: () -> Unit, onSw
             Box(
                 Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFE53935)),
-                contentAlignment = Alignment.CenterEnd
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.error),
+                contentAlignment = Alignment.CenterEnd,
             ) {
-                Text("删除", color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(end = 24.dp))
+                Column(
+                    Modifier.width(76.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(Icons.Filled.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.onError)
+                    Text("删除", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onError)
+                }
             }
         },
     ) {
@@ -216,39 +198,103 @@ private fun HistoryCardContent(entry: History.Entry, onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (exists) 1f else 0.55f)
+            .alpha(if (exists) 1f else 0.6f),
     ) {
         Row(
             Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // 4:3 封面
             Box(
                 Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .width(88.dp)
+                    .aspectRatio(4f / 3f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             ) {
                 val coverBmp = rememberCover(entry.item.cover)
-                if (coverBmp != null) Image(
-                    coverBmp.asImageBitmap(),
-                    contentDescription = "封面",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+                if (coverBmp != null) {
+                    Image(
+                        coverBmp.asImageBitmap(),
+                        contentDescription = "封面",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        colorFilter = if (exists) null else ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
+                    )
+                }
             }
-            Column(Modifier.weight(1f)) {
-                Text(entry.item.title, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(entry.item.quality, style = MaterialTheme.typography.bodySmall)
-                Text(
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(entry.item.title, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val meta = listOfNotNull(
+                    entry.item.quality.ifEmpty { null },
+                    if (entry.item.size > 0) fmtSize(entry.item.size) else null,
                     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(entry.item.time)),
-                    style = MaterialTheme.typography.labelSmall
-                )
+                ).joinToString(" · ")
+                Text(meta, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!exists) {
-                    Text("本地文件已删除", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    Text(
+                        "本地文件已删除",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.tertiaryContainer)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DetailSheet(context: Context, entry: History.Entry, onClose: () -> Unit, onDelete: () -> Unit) {
+    val item = entry.item
+    Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val coverBmp = rememberCover(item.cover)
+        if (coverBmp != null) {
+            Image(
+                coverBmp.asImageBitmap(),
+                contentDescription = "封面",
+                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        Text(item.title, style = MaterialTheme.typography.titleLarge, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (item.quality.isNotEmpty()) MetaLine("清晰度", item.quality)
+            if (item.size > 0) MetaLine("大小", fmtSize(item.size))
+            MetaLine("时间", SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(item.time)))
+            if (item.path.isNotEmpty()) MetaLine("保存位置", item.path)
+            if (!entry.exists) MetaLine("状态", "本地文件已删除")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (entry.exists && item.uri.isNotEmpty()) {
+                FilledTonalButton(onClick = { openFile(context, Uri.parse(item.uri), item.title); onClose() }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("播放")
+                }
+                FilledTonalButton(onClick = { shareVideo(context, Uri.parse(item.uri), item.title); onClose() }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("分享")
+                }
+            }
+            if (item.bvid.isNotEmpty()) {
+                FilledTonalButton(onClick = { ReDownloadRequest.request(item.bvid); onClose() }, modifier = Modifier.weight(1f)) { Text("重新下载") }
+            }
+        }
+        TextButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
+            Text("删除记录", color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+@Composable
+private fun MetaLine(label: String, value: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -258,4 +304,13 @@ private fun rememberCover(url: String): Bitmap? {
         value = if (url.isNotEmpty()) ImageUtil.load(url) else null
     }
     return bmp
+}
+
+private fun fmtSize(bytes: Long): String {
+    return when {
+        bytes >= 1024 * 1024 * 1024 -> String.format(Locale.US, "%.2f GB", bytes / 1024.0 / 1024.0 / 1024.0)
+        bytes >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / 1024.0 / 1024.0)
+        bytes >= 1024 -> String.format(Locale.US, "%.0f KB", bytes / 1024.0)
+        else -> bytes.toString() + " B"
+    }
 }
