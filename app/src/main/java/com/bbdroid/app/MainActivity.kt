@@ -89,6 +89,11 @@ fun MainScreen(context: Context) {
         if (ReDownloadRequest.id > 0) selectedTab = 0
     }
 
+    // 下载页导入视频到转码时，切到工具箱页
+    LaunchedEffect(ToolboxImport.id) {
+        if (ToolboxImport.id > 0) selectedTab = 1
+    }
+
     val navColors = NavigationBarItemDefaults.colors(
         selectedIconColor = MaterialTheme.colorScheme.onSurface,
         selectedTextColor = MaterialTheme.colorScheme.onSurface,

@@ -14,6 +14,8 @@ data class FfmpegOptions(
     val channels: String = "",
     val sampleRate: String = "",
     val volume: String = "",
+    val startTime: String = "",
+    val duration: String = "",
 )
 
 object Ffmpeg {
@@ -46,7 +48,9 @@ object Ffmpeg {
 
     fun buildCommand(o: FfmpegOptions): String {
         val parts = mutableListOf<String>()
+        if (o.startTime.isNotEmpty()) parts.add("-ss " + o.startTime)
         parts.add("-i"); parts.add(q(o.inputPath))
+        if (o.duration.isNotEmpty()) parts.add("-t " + o.duration)
 
         // 视频
         when {

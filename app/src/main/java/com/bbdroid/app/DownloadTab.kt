@@ -126,6 +126,14 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
     var userName by remember { mutableStateOf("") }
     var userFace by remember { mutableStateOf<Bitmap?>(null) }
 
+    // 把已下载的视频导入到 FFmpeg 转码页
+    fun importToToolbox(uri: Uri, name: String) {
+        scope.launch {
+            val f = withContext(Dispatchers.IO) { copyToCache(context, uri) }
+            ToolboxImport.request(f.absolutePath, name)
+        }
+    }
+
     fun refreshLogin() {
         val c = Auth.load(context)
         BiliApi.cookie = c
@@ -497,9 +505,10 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
             BatchTaskCard(tasks = DownloadSession.tasks, status = if (batchRunning) batchStatus else collectionStatus, onStop = { showStopConfirm = true })
         }
 
-        // 打开视频
+        // 打开视频 / 导入转码
         if (openUri != null) {
             OutlinedButton(onClick = { openFile(context, openUri!!, openName) }, modifier = Modifier.fillMaxWidth()) { Text("打开视频 ▶") }
+            OutlinedButton(onClick = { importToToolbox(openUri!!, openName) }, modifier = Modifier.fillMaxWidth()) { Text("导入到转码 🎬") }
         }
 
         // 状态 / 错误
@@ -529,6 +538,7 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
                 if (dialogUri != null) {
                     TextButton(onClick = { shareVideo(context, dialogUri!!, dialogName); showDownloadDialog = false }) { Text("分享") }
                     TextButton(onClick = { openFile(context, dialogUri!!, dialogName); showDownloadDialog = false }) { Text("打开") }
+                    TextButton(onClick = { importToToolbox(dialogUri!!, dialogName); showDownloadDialog = false }) { Text("导入转码") }
                 }
                 TextButton(onClick = { showDownloadDialog = false }) { Text("知道了") }
             }
