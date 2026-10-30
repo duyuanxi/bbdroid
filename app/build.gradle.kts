@@ -22,8 +22,8 @@ android {
         applicationId = "com.bbdroid.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.3.1"
     }
 
     signingConfigs {
@@ -56,6 +56,15 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    // ffmpeg-kit 必须解压原生库后再加载，否则 System.loadLibrary 解析不到
+    // libavcodec.so / libavformat.so 等 DT_NEEDED 依赖，导致所有 FFmpeg 功能报
+    // UnsatisfiedLinkError（合并、转码、自检全部失败）。
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 

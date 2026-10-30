@@ -85,7 +85,15 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
         }
     }
 
-    val ffmpegVersion = remember { runCatching { com.arthenica.ffmpegkit.FFmpegKitConfig.getFFmpegVersion() }.getOrNull() ?: "未知" }
+    // 真正尝试加载 ffmpeg-kit 原生库并读取版本；失败时把真实异常暴露到界面上
+    val ffmpegDiag = remember {
+        runCatching { com.arthenica.ffmpegkit.FFmpegKitConfig.getVersion() }
+            .fold(
+                onSuccess = { "可用 · " + it },
+                onFailure = { "不可用 · " + (it.message ?: it.toString()) },
+            )
+    }
+    val deviceAbis = remember { android.os.Build.SUPPORTED_ABIS.joinToString(", ") }
 
     Column(
         modifier = Modifier
@@ -196,7 +204,8 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("FFmpeg 引擎自检", style = MaterialTheme.typography.titleMedium)
-                Text("版本: " + ffmpegVersion + " · " + if (ffmpegVersion != "未知") "可用" else "未加载", style = MaterialTheme.typography.bodySmall)
+                Text("引擎: " + ffmpegDiag, style = MaterialTheme.typography.bodySmall)
+                Text("设备 ABI: " + deviceAbis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedButton(onClick = { filePicker.launch(arrayOf("video/*")) }) { Text("选择视频") }
                 TextButton(
                     enabled = pickedFile != null,
