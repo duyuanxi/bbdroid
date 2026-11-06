@@ -7,11 +7,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Download
@@ -20,161 +20,161 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.dp
 
-// 全局 Snackbar 宿主：各屏通过 scope.launch { AppSnackbar.host.showSnackbar(...) } 提示
-object AppSnackbar {
-    val host = SnackbarHostState()
-}
+object AppSnackbar { val host = SnackbarHostState() }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
-            val ctx = this
-            val settings by SettingsStore.settings(ctx).collectAsState(initial = AppSettings())
-            BbdroidTheme(
-                mode = settings.themeMode,
-                glass = GlassConfig(settings.glassEnabled, settings.glassIntensity),
-            ) {
-                MainScreen(context = ctx)
+            val settings by SettingsStore.settings(this).collectAsState(initial = AppSettings())
+            BbdroidTheme(settings.themeMode, GlassConfig(settings.glassEnabled, settings.glassIntensity)) {
+                MainScreen(this)
             }
         }
     }
 }
 
+private data class Destination(val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
+private val destinations = listOf(
+    Destination("下载", Icons.Outlined.Download, Icons.Filled.Download),
+    Destination("工具箱", Icons.Outlined.Build, Icons.Filled.Build),
+    Destination("历史", Icons.Outlined.History, Icons.Filled.History),
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(context: Context) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var showSettings by remember { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) { if (Build.VERSION.SDK_INT < 29) permission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) }
+    LaunchedEffect(ReDownloadRequest.id) { if (ReDownloadRequest.id > 0) selectedTab = 0 }
+    LaunchedEffect(ToolboxImport.id) { if (ToolboxImport.id > 0) selectedTab = 1 }
 
-    val settings by SettingsStore.settings(context).collectAsState(initial = AppSettings())
-    val glass = settings.glassEnabled
-
-    // 启动时自动申请存储权限（仅 Android 9 及以下；Android 10+ 用 MediaStore 无需权限）
-    val storagePermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT < 29) {
-            storagePermLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        }
-    }
-
-    // 历史记录触发重新下载时，切回下载页
-    LaunchedEffect(ReDownloadRequest.id) {
-        if (ReDownloadRequest.id > 0) selectedTab = 0
-    }
-
-    // 下载页导入视频到转码时，切到工具箱页
-    LaunchedEffect(ToolboxImport.id) {
-        if (ToolboxImport.id > 0) selectedTab = 1
-    }
-
-    val navColors = NavigationBarItemDefaults.colors(
-        selectedIconColor = MaterialTheme.colorScheme.onSurface,
-        selectedTextColor = MaterialTheme.colorScheme.onSurface,
-        indicatorColor = BrandPink,
-        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    Box(Modifier.fillMaxSize()) {
-        if (glass) GlassBackdrop(settings.glassIntensity)
-
-        Scaffold(
-            containerColor = if (glass) Color.Transparent else MaterialTheme.colorScheme.surface,
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            when (selectedTab) {
-                                0 -> "下载"
-                                1 -> "工具箱"
-                                else -> "历史"
-                            }
-                        )
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = if (glass) Color.Transparent else MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    actions = {
-                        IconButton(onClick = { showSettings = true }) {
-                            Icon(Icons.Filled.Settings, contentDescription = "设置")
+    GlassScene {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val wide = maxWidth >= 700.dp
+            Row(Modifier.fillMaxSize()) {
+                if (wide) {
+                    NavigationRail(
+                        modifier = Modifier.statusBarsPadding().navigationBarsPadding().padding(12.dp).then(glassMaterial()),
+                        containerColor = if (LocalGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
+                        header = { Text("BB", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(16.dp)) },
+                    ) {
+                        Spacer(Modifier.height(24.dp))
+                        destinations.forEachIndexed { index, destination ->
+                            NavigationRailItem(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index },
+                                icon = { Icon(if (selectedTab == index) destination.selectedIcon else destination.icon, null) },
+                                label = { Text(destination.label) },
+                                modifier = Modifier.padding(vertical = 8.dp),
+                            )
                         }
                     }
-                )
-            },
-            snackbarHost = { SnackbarHost(AppSnackbar.host) },
-            bottomBar = {
-                NavigationBar(containerColor = if (glass) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer) {
-                    NavigationBarItem(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        icon = { Icon(if (selectedTab == 0) Icons.Filled.Download else Icons.Outlined.Download, contentDescription = null) },
-                        label = { Text("下载") },
-                        colors = navColors,
+                }
+                Scaffold(
+                    modifier = Modifier.weight(1f),
+                    containerColor = Color.Transparent,
+                    topBar = {
+                        TopAppBar(
+                            title = {
+                                Column {
+                                    Text("BBDroid", style = MaterialTheme.typography.titleLarge)
+                                    Text("视频下载与媒体工作台", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { showSettings = true }, modifier = Modifier.padding(end = 12.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)) {
+                                    Icon(Icons.Filled.Settings, "设置")
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                        )
+                    },
+                    bottomBar = {
+                        if (!wide) Box(Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            NavigationBar(
+                                modifier = Modifier.clip(CircleShape).then(glassMaterial(CircleShape)),
+                                containerColor = if (LocalGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+                                windowInsets = WindowInsets(0, 0, 0, 0),
+                                tonalElevation = 0.dp,
+                            ) {
+                                destinations.forEachIndexed { index, destination ->
+                                    NavigationBarItem(
+                                        selected = selectedTab == index,
+                                        onClick = { selectedTab = index },
+                                        icon = { Icon(if (selectedTab == index) destination.selectedIcon else destination.icon, null) },
+                                        label = { Text(destination.label) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            indicatorColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f),
+                                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    snackbarHost = { SnackbarHost(AppSnackbar.host) },
+                ) { padding ->
+                    val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
+                    val contentPadding = PaddingValues(
+                        top = padding.calculateTopPadding(),
+                        start = padding.calculateStartPadding(direction),
+                        end = padding.calculateEndPadding(direction),
                     )
-                    NavigationBarItem(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        icon = { Icon(if (selectedTab == 1) Icons.Filled.Build else Icons.Outlined.Build, contentDescription = null) },
-                        label = { Text("工具箱") },
-                        colors = navColors,
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        icon = { Icon(if (selectedTab == 2) Icons.Filled.History else Icons.Outlined.History, contentDescription = null) },
-                        label = { Text("历史") },
-                        colors = navColors,
-                    )
+                    CompositionLocalProvider(LocalPageBottomInset provides padding.calculateBottomPadding()) {
+                        Box(
+                            Modifier.padding(contentPadding).consumeWindowInsets(contentPadding)
+                                .imePadding().fillMaxSize().then(captureGlassContent()),
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            Box(Modifier.widthIn(max = 960.dp).fillMaxSize()) {
+                                // Keep inactive panes composed without measuring or placing them.
+                                TabPane(selectedTab == 0) { DownloadTab(context, Modifier.fillMaxSize()) }
+                                TabPane(selectedTab == 1) { ToolboxTab(context, Modifier.fillMaxSize()) }
+                                TabPane(selectedTab == 2) { HistoryTab(context, Modifier.fillMaxSize()) { selectedTab = 0 } }
+                            }
+                        }
+                    }
                 }
             }
-        ) { padding ->
-            val base = Modifier.padding(padding)
-            // 三个 tab 始终保持在组合中（隐藏的置为 0 尺寸），下载状态与协程不丢失
-            Box(Modifier.fillMaxSize()) {
-                DownloadTab(context, base.then(if (selectedTab == 0) Modifier.fillMaxSize() else Modifier.size(0.dp)))
-                ToolboxTab(context, base.then(if (selectedTab == 1) Modifier.fillMaxSize() else Modifier.size(0.dp)))
-                HistoryTab(context, base.then(if (selectedTab == 2) Modifier.fillMaxSize() else Modifier.size(0.dp)), onGoDownload = { selectedTab = 0 })
-            }
         }
+        if (showSettings) ModalBottomSheet(
+            onDismissRequest = { showSettings = false },
+            shape = DialogShape,
+            containerColor = MaterialTheme.colorScheme.surface,
+        ) { SettingsContent(context) { showSettings = false } }
+    }
+}
 
-        // 设置作为底部抽屉覆盖层
-        if (showSettings) {
-            ModalBottomSheet(
-                onDismissRequest = { showSettings = false },
-                shape = DialogShape,
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                dragHandle = null,
-            ) {
-                SettingsContent(context = context, onBack = { showSettings = false })
-            }
-        }
+@Composable
+private fun TabPane(active: Boolean, content: @Composable () -> Unit) {
+    Layout(content = content) { measurables, constraints ->
+        if (active) {
+            val children = measurables.map { it.measure(constraints) }
+            layout(constraints.maxWidth, constraints.maxHeight) { children.forEach { it.placeRelative(0, 0) } }
+        } else layout(0, 0) { }
+    }
+}
+
+@Composable
+fun PageHeading(title: String, description: String) {
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.headlineMedium)
+        Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

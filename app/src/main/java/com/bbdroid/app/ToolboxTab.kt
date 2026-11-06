@@ -4,51 +4,21 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
-import com.arthenica.ffmpegkit.FFprobeKit
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.io.File
 import java.util.Locale
 
-// 从下载页导入到转码页的请求
 object ToolboxImport {
     var path by mutableStateOf("")
     var name by mutableStateOf("")
@@ -56,317 +26,248 @@ object ToolboxImport {
     fun request(p: String, n: String) { path = p; name = n; id++ }
 }
 
-data class ProbeInfo(
-    val fileName: String = "",
-    val container: String = "",
-    val videoCodec: String = "",
-    val resolution: String = "",
-    val duration: String = "",
-    val size: String = "",
-    val audioCodec: String = "",
-)
+private data class MediaInput(val path: String, val name: String)
 
 @Composable
 fun Dropdown(label: String, options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    val label2 = options.firstOrNull { it.second == selected }?.first ?: selected
-    Column {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text(label2) }
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text(label + " · " + (options.firstOrNull { it.second == selected }?.first ?: selected), modifier = Modifier.weight(1f))
+            Text("⌄")
+        }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { (name, value) ->
-                DropdownMenuItem(text = { Text(name) }, onClick = { onSelect(value); expanded = false })
-            }
+            options.forEach { (name, value) -> DropdownMenuItem(text = { Text(name) }, onClick = { onSelect(value); expanded = false }) }
         }
     }
 }
 
 @Composable
-private fun SliderRow(label: String, valueText: String, value: Float, range: ClosedFloatingPointRange<Float>, onValue: (Float) -> Unit) {
+private fun ParameterSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, onValue: (Float) -> Unit) {
     Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            Text(valueText, style = MaterialTheme.typography.labelMedium)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(value.toInt().toString(), color = MaterialTheme.colorScheme.primary)
         }
         Slider(value = value, onValueChange = onValue, valueRange = range)
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ToolboxTab(context: Context, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
-
-    var inputPath by remember { mutableStateOf("") }
-    var inputName by remember { mutableStateOf("（未选择文件）") }
-    var format by remember { mutableStateOf("mp4") }
-    var videoCodec by remember { mutableStateOf("libx264") }
-    var useCrf by remember { mutableStateOf(true) }
-    var crf by remember { mutableStateOf(23f) }
-    var bitrate by remember { mutableStateOf(2000f) } // kbps
-    var resolution by remember { mutableStateOf("") }
-    var fps by remember { mutableStateOf("") }
-    var audioCodec by remember { mutableStateOf("aac") }
-    var audioBitrate by remember { mutableStateOf("128k") }
-    var channels by remember { mutableStateOf("") }
-    var sampleRate by remember { mutableStateOf("") }
-    var volume by remember { mutableStateOf(1f) }
-    var startTime by remember { mutableStateOf("") }
-    var duration by remember { mutableStateOf("") }
+    var files by remember { mutableStateOf<List<MediaInput>>(emptyList()) }
+    var metadata by remember { mutableStateOf("") }
+    var format by rememberSaveable { mutableStateOf("mp4") }
+    var videoCodec by rememberSaveable { mutableStateOf("libx264") }
+    var audioCodec by rememberSaveable { mutableStateOf("aac") }
+    var crf by rememberSaveable { mutableFloatStateOf(23f) }
+    var useCrf by rememberSaveable { mutableStateOf(true) }
+    var bitrate by rememberSaveable { mutableFloatStateOf(2000f) }
+    var resolution by rememberSaveable { mutableStateOf("") }
+    var fps by rememberSaveable { mutableStateOf("") }
+    var audioBitrate by rememberSaveable { mutableStateOf("128k") }
+    var channels by rememberSaveable { mutableStateOf("") }
+    var sampleRate by rememberSaveable { mutableStateOf("") }
+    var volume by rememberSaveable { mutableFloatStateOf(1f) }
+    var startTime by rememberSaveable { mutableStateOf("") }
+    var duration by rememberSaveable { mutableStateOf("") }
+    var advanced by rememberSaveable { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var running by remember { mutableStateOf(false) }
-    var probe by remember { mutableStateOf<ProbeInfo?>(null) }
-    var batchFiles by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var importing by remember { mutableStateOf(false) }
+    var job by remember { mutableStateOf<Job?>(null) }
 
-    // 接收从下载页导入的视频
-    LaunchedEffect(ToolboxImport.id) {
-        if (ToolboxImport.id > 0 && ToolboxImport.path.isNotEmpty()) {
-            inputPath = ToolboxImport.path
-            inputName = ToolboxImport.name
-            batchFiles = emptyList()
-            status = ""
-            probe = withContext(Dispatchers.IO) { probeFile(File(ToolboxImport.path)) }
-        }
+    fun selectFormat(value: String) {
+        format = value
+        if (Ffmpeg.videoCodecsFor(value).none { it.second == videoCodec }) videoCodec = if (value == "webm") "libvpx-vp9" else Ffmpeg.videoCodecsFor(value).first().second
+        if (Ffmpeg.audioCodecsFor(value).none { it.second == audioCodec }) audioCodec = Ffmpeg.audioCodecsFor(value).first().second
     }
-
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        uri?.let { val f = copyToCache(context, it); inputPath = f.absolutePath; inputName = f.name; batchFiles = emptyList(); status = ""; scope.launch { probe = probeFile(f) } }
-    }
-    val multiPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) {
-            val files = uris.map { val f = copyToCache(context, it); f.absolutePath to f.name }
-            batchFiles = files; inputPath = files.first().first; inputName = "批量导入 " + files.size + " 个"; status = ""
-        }
-    }
-    val treePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        uri?.let {
-            val files = scanFolder(context, it)
-            if (files.isNotEmpty()) { batchFiles = files; inputPath = files.first().first; inputName = "扫描到 " + files.size + " 个"; status = "" }
-            else status = "文件夹里没找到媒体文件"
-        }
-    }
-
-    val audioBitrateOptions = listOf("64k" to "64k", "96k" to "96k", "128k" to "128k", "192k" to "192k", "256k" to "256k", "320k" to "320k")
-
-    val doTranscode: (String, String) -> Unit = { p, n ->
+    fun importFiles(uris: List<Uri>) {
+        if (running || importing || uris.isEmpty()) return
+        importing = true
         scope.launch {
-            running = true; status = ""
-            val out = withContext(Dispatchers.IO) {
-                transcodeOne(
-                    context, p, n, format, videoCodec, useCrf, crf.toInt(), bitrate.toInt(),
-                    resolution, fps, audioCodec, audioBitrate, channels, sampleRate, volume, startTime, duration,
-                ) { status = it }
+            val imported = mutableListOf<MediaInput>()
+            try {
+                withContext(Dispatchers.IO) {
+                    uris.forEach { uri ->
+                        val name = queryDisplayName(context, uri) ?: "媒体文件"
+                        imported += MediaInput(copyToCache(context, uri).absolutePath, name)
+                    }
+                }
+                files = imported.toList()
+                metadata = if (files.size == 1) describeMedia(files.first()) else "已导入 ${files.size} 个文件"
+                status = ""
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                withContext(Dispatchers.IO) { imported.forEach { File(it.path).delete() } }
+                status = "导入失败：${e.message}"
+            } finally { importing = false }
+        }
+    }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { it?.let { uri -> importFiles(listOf(uri)) } }
+    val multiPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { importFiles(it) }
+    val treePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null && !running && !importing) {
+            importing = true
+            scope.launch {
+                try {
+                    val uris = withContext(Dispatchers.IO) {
+                        val tree = DocumentFile.fromTreeUri(context, uri) ?: error("无法读取文件夹")
+                        tree.listFiles().filter { it.isFile && it.name?.substringAfterLast('.', "")?.lowercase() in mediaExtensions }.map { it.uri }
+                    }
+                    importing = false
+                    if (uris.isEmpty()) status = "文件夹中没有可导入的媒体文件" else importFiles(uris)
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { importing = false; status = "读取文件夹失败：${e.message}" }
             }
-            status = out
-            running = false
+        }
+    }
+    LaunchedEffect(ToolboxImport.id) {
+        if (ToolboxImport.id > 0 && ToolboxImport.path.isNotBlank() && !running) {
+            files = listOf(MediaInput(ToolboxImport.path, ToolboxImport.name))
+            metadata = describeMedia(files.first()); status = ""
         }
     }
 
-    Column(modifier = modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("FFmpeg 工具箱", style = MaterialTheme.typography.titleLarge)
-
-        // 来源区
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { picker.launch(arrayOf("video/*", "audio/*")) }, modifier = Modifier.weight(1f)) { Text("选文件") }
-            OutlinedButton(onClick = { multiPicker.launch(arrayOf("video/*", "audio/*")) }, modifier = Modifier.weight(1f)) { Text("批量导入") }
-            OutlinedButton(onClick = { treePicker.launch(null) }, modifier = Modifier.weight(1f)) { Text("选文件夹") }
-        }
-        Text("输入: " + inputName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-        // 探测结果卡
-        if (probe != null) {
-            Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("探测结果", style = MaterialTheme.typography.titleSmall)
-                    val p = probe!!
-                    InfoLine("文件名", p.fileName)
-                    InfoLine("容器", p.container)
-                    InfoLine("视频", if (p.videoCodec.isNotEmpty()) p.videoCodec + (if (p.resolution.isNotEmpty()) " · " + p.resolution else "") else "无视频轨")
-                    InfoLine("音频", if (p.audioCodec.isNotEmpty()) p.audioCodec else "无音频轨")
-                    InfoLine("时长", p.duration)
-                    InfoLine("大小", p.size)
+    fun start() {
+        if (running || importing || files.isEmpty()) return
+        val inputs = files.toList()
+        val options = FfmpegOptions(videoCodec = videoCodec, useCrf = useCrf, crf = crf.toInt().toString(), videoBitrate = "${bitrate.toInt()}k",
+            resolution = resolution, fps = fps, audioCodec = audioCodec, audioBitrate = audioBitrate, channels = channels, sampleRate = sampleRate,
+            volume = String.format(Locale.US, "%.1f", volume), startTime = startTime.trim(), duration = duration.trim())
+        val outputFormat = format
+        running = true
+        job = scope.launch {
+            var completed = 0
+            val logs = mutableListOf<String>()
+            try {
+                for ((index, input) in inputs.withIndex()) {
+                    status = "正在处理 ${index + 1}/${inputs.size} · ${input.name}"
+                    val result = transcodeOne(context, input, outputFormat, options)
+                    if (result.first) completed++
+                    logs += result.second
                 }
-            }
+                status = "完成 $completed/${inputs.size} 个文件\n" + logs.joinToString("\n\n")
+            } catch (e: CancellationException) { status = "已停止 · 完成 $completed/${inputs.size} 个文件"; throw e }
+            finally { running = false; job = null }
         }
+    }
 
-        // 输出格式
-        Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("输出格式", style = MaterialTheme.typography.titleSmall)
-                Dropdown("容器格式", Ffmpeg.formats, format) { format = it }
-            }
-        }
-
-        // 视频参数
-        Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("视频参数", style = MaterialTheme.typography.titleSmall)
-                Dropdown("视频编码", Ffmpeg.videoCodecs, videoCodec) { videoCodec = it }
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    val items = listOf("质量(CRF)" to true, "码率" to false)
-                    items.forEachIndexed { i, (name, v) ->
-                        SegmentedButton(
-                            selected = useCrf == v,
-                            onClick = { useCrf = v },
-                            shape = SegmentedButtonDefaults.itemShape(index = i, count = items.size),
-                        ) { Text(name) }
-                    }
+    Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 12.dp, bottom = LocalPageBottomInset.current + 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        PageHeading("媒体工具箱", "转码、提取音频与无损封装。")
+        AppCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("01  导入媒体", style = MaterialTheme.typography.titleMedium)
+                Text(if (files.isEmpty()) "从设备中选择视频或音频" else files.first().name + if (files.size > 1) " 等 ${files.size} 个文件" else "", style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = { picker.launch(arrayOf("video/*", "audio/*")) }, enabled = !running && !importing, modifier = Modifier.fillMaxWidth()) { Text(if (importing) "正在导入…" else "选择文件") }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { multiPicker.launch(arrayOf("video/*", "audio/*")) }, enabled = !running && !importing) { Text("批量导入") }
+                    OutlinedButton(onClick = { treePicker.launch(null) }, enabled = !running && !importing) { Text("选择文件夹") }
                 }
-                if (useCrf) SliderRow("CRF 值（越小越清晰）", crf.toInt().toString(), crf, 0f..51f) { crf = it }
-                else SliderRow("视频码率", bitrate.toInt().toString() + "k", bitrate, 500f..20000f) { bitrate = it }
-                Dropdown("分辨率", Ffmpeg.resolutions, resolution) { resolution = it }
-                Dropdown("帧率", Ffmpeg.fpsList, fps) { fps = it }
+                if (metadata.isNotBlank()) Text(metadata, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
-        // 音频参数
-        Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("音频参数", style = MaterialTheme.typography.titleSmall)
-                Dropdown("音频编码", Ffmpeg.audioCodecs, audioCodec) { audioCodec = it }
-                Dropdown("音频码率", audioBitrateOptions, audioBitrate) { audioBitrate = it }
-                Dropdown("声道", Ffmpeg.channelsList, channels) { channels = it }
-                Dropdown("采样率", Ffmpeg.sampleRates, sampleRate) { sampleRate = it }
-                SliderRow("音量", String.format(Locale.US, "%.1fx", volume), volume, 0f..3f) { volume = it }
+        AppCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("02  输出设置", style = MaterialTheme.typography.titleMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = format == "mp4" && videoCodec == "libx264", enabled = !running, onClick = { selectFormat("mp4"); videoCodec = "libx264"; audioCodec = "aac" }, label = { Text("通用视频") })
+                    FilterChip(selected = videoCodec == "copy" && audioCodec == "copy", enabled = !running, onClick = { selectFormat("mkv"); videoCodec = "copy"; audioCodec = "copy" }, label = { Text("无损封装") })
+                    FilterChip(selected = format == "mp3", enabled = !running, onClick = { selectFormat("mp3") }, label = { Text("提取音频") })
+                }
+                Dropdown("格式", Ffmpeg.formats, format) { if (!running) selectFormat(it) }
+                Text("${Ffmpeg.videoCodecsFor(format).firstOrNull { it.second == videoCodec }?.first.orEmpty()} · ${Ffmpeg.audioCodecsFor(format).firstOrNull { it.second == audioCodec }?.first.orEmpty()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "收起详细参数" else "调整编码与剪辑参数") }
             }
         }
-
-        // 剪辑（可选）
-        Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("剪辑（可选）", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(value = startTime, onValueChange = { startTime = it }, label = { Text("开始时间，如 10 或 00:01:30（留空=从头）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = duration, onValueChange = { duration = it }, label = { Text("时长，如 30（留空=到结尾）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            }
-        }
-
-        // 主操作
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = { scope.launch { probe = withContext(Dispatchers.IO) { if (inputPath.isNotEmpty()) probeFile(File(inputPath)) else null } } }) { Text("读元信息") }
-            Button(enabled = inputPath.isNotEmpty() && !running, onClick = { doTranscode(inputPath, inputName) }, modifier = Modifier.weight(1f)) { Text(if (running) "转码中…" else "开始转码") }
-        }
-        if (batchFiles.isNotEmpty()) {
-            Button(enabled = !running, onClick = {
-                scope.launch {
-                    running = true; var done = 0
-                    withContext(Dispatchers.IO) {
-                        for ((i, f) in batchFiles.withIndex()) {
-                            status = "[" + (i + 1) + "/" + batchFiles.size + "] " + f.second
-                            val r = transcodeOne(context, f.first, f.second, format, videoCodec, useCrf, crf.toInt(), bitrate.toInt(), resolution, fps, audioCodec, audioBitrate, channels, sampleRate, volume, startTime, duration) { }
-                            if (r.startsWith("✅")) done++
+        if (advanced) {
+            if (format !in Ffmpeg.audioFormats && format != "gif") AppCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("视频", style = MaterialTheme.typography.titleMedium)
+                    Dropdown("编码", Ffmpeg.videoCodecsFor(format), videoCodec) { if (!running) videoCodec = it }
+                    if (videoCodec != "copy" && videoCodec != "none") {
+                        if (videoCodec in setOf("libx264", "libx265", "libaom-av1", "libvpx-vp9")) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("使用恒定质量 CRF", modifier = Modifier.weight(1f))
+                                Switch(checked = useCrf, onCheckedChange = { if (!running) useCrf = it })
+                            }
+                            if (useCrf) ParameterSlider("质量（数值越小越清晰）", crf, 0f..51f) { if (!running) crf = it }
                         }
+                        if (!useCrf || videoCodec.contains("mediacodec")) ParameterSlider("码率 kbps", bitrate, 500f..20000f) { if (!running) bitrate = it }
+                        Dropdown("分辨率", Ffmpeg.resolutions, resolution) { if (!running) resolution = it }
+                        Dropdown("帧率", Ffmpeg.fpsList, fps) { if (!running) fps = it }
+                        if (videoCodec.contains("mediacodec")) Text("硬件编码取决于设备支持；失败时可切换 H.264 软件编码。", style = MaterialTheme.typography.bodySmall)
                     }
-                    status = "✅ 批量完成 " + done + " 个"; running = false
                 }
-            }, modifier = Modifier.fillMaxWidth()) { Text("批量转码 " + batchFiles.size + " 个") }
-        }
-
-        // 进行中进度 + 日志
-        if (running) LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = BrandPink)
-        if (status.isNotEmpty()) {
-            Text(
-                status,
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 160.dp)
-                    .verticalScroll(rememberScrollState())
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(8.dp))
-                    .padding(10.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun InfoLine(label: String, value: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 1.dp))
-        Text(value, style = MaterialTheme.typography.bodySmall)
-    }
-}
-
-private suspend fun transcodeOne(
-    context: Context, path: String, name: String, format: String,
-    videoCodec: String, useCrf: Boolean, crf: Int, videoBitrateKbps: Int,
-    resolution: String, fps: String,
-    audioCodec: String, audioBitrate: String, channels: String, sampleRate: String, volume: Float,
-    startTime: String, duration: String,
-    onProgress: (String) -> Unit,
-): String {
-    return try {
-        val out = File(context.cacheDir, "out." + format)
-        val opt = FfmpegOptions(
-            inputPath = path, outputPath = out.absolutePath,
-            videoCodec = videoCodec, useCrf = useCrf, crf = crf.toString(), videoBitrate = videoBitrateKbps.toString() + "k",
-            resolution = resolution, fps = fps,
-            audioCodec = audioCodec, audioBitrate = audioBitrate, channels = channels, sampleRate = sampleRate,
-            volume = String.format(Locale.US, "%.1f", volume),
-            startTime = startTime, duration = duration,
-        )
-        onProgress("转码中…")
-        val r = FFmpegEngine.run(Ffmpeg.buildCommand(opt))
-        if (!r.success) return "❌ 失败: " + r.output.takeLast(300)
-        onProgress("保存中…")
-        val base = name.substringBeforeLast(".")
-        val saved = Storage.saveVideo(context, out, base + "." + format).display
-        out.delete()
-        "✅ 已保存 " + saved
-    } catch (e: Exception) {
-        "❌ " + (e.message ?: e.toString())
-    }
-}
-
-private val mediaExts = setOf("mp4", "mkv", "mov", "avi", "flv", "wmv", "webm", "ts", "m2ts", "mp3", "aac", "flac", "wav", "ogg", "m4a")
-
-private fun scanFolder(context: Context, treeUri: Uri): List<Pair<String, String>> {
-    val result = mutableListOf<Pair<String, String>>()
-    val tree = DocumentFile.fromTreeUri(context, treeUri) ?: return result
-    for (f in tree.listFiles()) {
-        if (f.isFile) {
-            val name = f.name ?: continue
-            val ext = name.substringAfterLast('.', "").lowercase()
-            if (ext in mediaExts) { val c = copyToCache(context, f.uri); result.add(c.absolutePath to c.name) }
-        }
-    }
-    return result
-}
-
-private fun probeFile(path: File): ProbeInfo {
-    return try {
-        val session = FFprobeKit.execute("-v quiet -print_format json -show_format -show_streams \"" + path.absolutePath + "\"")
-        val json = JSONObject(session.output)
-        val format = json.optJSONObject("format")
-        val container = format?.optString("format_name", "?") ?: "?"
-        val duration = format?.optDouble("duration", 0.0) ?: 0.0
-        val size = format?.optLong("size", 0) ?: 0
-        var videoCodec = ""; var resolution = ""; var audioCodec = ""; var sampleRate = ""; var channels = ""
-        val streams = json.optJSONArray("streams")
-        if (streams != null) for (i in 0 until streams.length()) {
-            val s = streams.getJSONObject(i)
-            when (s.optString("codec_type", "")) {
-                "video" -> { videoCodec = codecName(s.optString("codec_name")); resolution = s.optInt("width").toString() + "x" + s.optInt("height") }
-                "audio" -> { audioCodec = codecName(s.optString("codec_name")); sampleRate = s.optString("sample_rate", "") + "Hz"; channels = s.optInt("channels").toString() + "ch" }
+            }
+            if (format != "gif") AppCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("音频", style = MaterialTheme.typography.titleMedium)
+                    Dropdown("编码", Ffmpeg.audioCodecsFor(format), audioCodec) { if (!running) audioCodec = it }
+                    if (audioCodec !in setOf("none", "copy")) {
+                        if (audioCodec !in setOf("flac", "pcm_s16le")) Dropdown("码率", listOf("64 kbps" to "64k", "128 kbps" to "128k", "192 kbps" to "192k", "256 kbps" to "256k", "320 kbps" to "320k"), audioBitrate) { if (!running) audioBitrate = it }
+                        Dropdown("声道", Ffmpeg.channelsList, channels) { if (!running) channels = it }
+                        Dropdown("采样率", Ffmpeg.sampleRates, sampleRate) { if (!running) sampleRate = it }
+                        Text("音量 ${String.format(Locale.US, "%.1f", volume)} 倍", style = MaterialTheme.typography.bodyMedium)
+                        Slider(value = volume, onValueChange = { if (!running) volume = it }, valueRange = 0f..3f)
+                    }
+                }
+            }
+            AppCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("剪辑", style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(startTime, { startTime = it }, enabled = !running, label = { Text("开始时间，秒或 00:01:30") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(duration, { duration = it }, enabled = !running, label = { Text("持续秒数，留空到结尾") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    if (videoCodec == "copy") Text("复制流时按关键帧剪辑，起点可能有偏差。", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
-        val audioDesc = if (audioCodec.isNotEmpty()) audioCodec + (if (sampleRate.isNotEmpty()) " · " + sampleRate else "") + (if (channels.isNotEmpty()) " · " + channels else "") else ""
-        ProbeInfo(
-            fileName = path.name,
-            container = container,
-            videoCodec = videoCodec,
-            resolution = resolution,
-            duration = fmtDuration(duration),
-            size = fmtSize(size),
-            audioCodec = audioDesc,
-        )
-    } catch (e: Exception) { ProbeInfo(fileName = path.name, container = "读取失败") }
+        Button(onClick = { start() }, enabled = files.isNotEmpty() && !running && !importing, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(if (running) "正在处理…" else if (files.size > 1) "处理 ${files.size} 个文件" else "开始处理") }
+        if (running) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            OutlinedButton(onClick = { job?.cancel() }, modifier = Modifier.fillMaxWidth()) { Text("停止处理") }
+        }
+        if (status.isNotBlank()) AppCard(Modifier.fillMaxWidth()) {
+            Text(status, modifier = Modifier.padding(20.dp), style = MaterialTheme.typography.bodySmall)
+        }
+    }
 }
 
-private fun fmtDuration(seconds: Double): String {
-    val t = seconds.toLong(); val h = t / 3600; val m = (t % 3600) / 60; val s = t % 60
-    return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, s) else String.format(Locale.US, "%d:%02d", m, s)
+private suspend fun transcodeOne(context: Context, input: MediaInput, format: String, options: FfmpegOptions): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+    var output: File? = null
+    try {
+        val out = File.createTempFile("transcode-", ".$format", context.cacheDir)
+        output = out
+        val arguments = Ffmpeg.buildArguments(options.copy(inputPath = input.path, outputPath = out.absolutePath))
+        val result = FFmpegEngine.run(arguments)
+        if (!result.success || out.length() == 0L) return@withContext false to "${input.name}：处理失败\n${result.output.takeLast(1800)}"
+        currentCoroutineContext().ensureActive()
+        val saved = Storage.saveVideo(context, out, sanitizeFilename(input.name.substringBeforeLast('.')) + ".$format")
+        true to "已保存 · ${saved.display}"
+    } catch (e: CancellationException) { throw e }
+    catch (e: Exception) { false to "${input.name}：${e.message}" }
+    finally { output?.delete() }
 }
-private fun fmtSize(bytes: Long): String = String.format(Locale.US, "%.1f MB", bytes / 1024.0 / 1024.0)
-private fun codecName(codec: String): String = when (codec.lowercase()) {
-    "h264" -> "H.264"; "hevc" -> "H.265"; "av1" -> "AV1"; "vp9" -> "VP9"; "mpeg4" -> "MPEG4"; "aac" -> "AAC"; "mp3" -> "MP3"; "flac" -> "FLAC"; "opus" -> "Opus"; "pcm_s16le" -> "PCM"; else -> codec.uppercase()
+
+private suspend fun describeMedia(input: MediaInput): String {
+    val result = FFmpegEngine.probe(input.path)
+    if (!result.success) return "媒体信息读取失败：${result.output.takeLast(1400)}"
+    return try {
+        val json = JSONObject(result.output)
+        val format = json.optJSONObject("format")
+        val streams = json.optJSONArray("streams")
+        val details = mutableListOf<String>()
+        details += format?.optString("format_name").orEmpty()
+        val seconds = format?.optString("duration")?.toDoubleOrNull()
+        if (seconds != null) details += String.format(Locale.US, "%.1f 秒", seconds)
+        if (streams != null) for (i in 0 until streams.length()) {
+            val stream = streams.getJSONObject(i)
+            if (stream.optString("codec_type") in setOf("video", "audio")) details += stream.optString("codec_name") +
+                if (stream.optString("codec_type") == "video") " ${stream.optInt("width")} × ${stream.optInt("height")}" else ""
+        }
+        details.filter { it.isNotBlank() }.joinToString(" · ")
+    } catch (e: Exception) { "媒体信息解析失败：${e.message}" }
 }
+private val mediaExtensions = setOf("mp4", "mkv", "mov", "avi", "flv", "wmv", "webm", "ts", "m2ts", "mp3", "aac", "flac", "wav", "ogg", "m4a")

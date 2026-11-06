@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -73,23 +74,17 @@ fun HistoryTab(context: Context, modifier: Modifier = Modifier, onGoDownload: ()
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = LocalPageBottomInset.current + 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 标题行
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("下载历史", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                Text(entries.size.toString() + " 条", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        item { PageHeading("下载历史", "${entries.size} 条记录 · 打开、分享或再次下载。") }
 
         if (entries.isEmpty()) {
             item {
                 EmptyHistory(onGoDownload)
             }
         } else {
-            items(entries, key = { it.item.id to it.item.time }) { e ->
+            items(entries, key = { "${it.item.id}:${it.item.time}" }) { e ->
                 key(e.item.id, e.item.time) {
                     SwipeableHistoryCard(
                         entry = e,
@@ -196,6 +191,8 @@ private fun HistoryCardContent(entry: History.Entry, onClick: () -> Unit) {
     val exists = entry.exists
     Card(
         onClick = onClick,
+        shape = PanelShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier
             .fillMaxWidth()
             .alpha(if (exists) 1f else 0.6f),

@@ -15,7 +15,7 @@ private val Context.dataStore by preferencesDataStore(name = "bbdroid_settings")
 
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val glassEnabled: Boolean = false,
+    val glassEnabled: Boolean = true,
     val glassIntensity: Float = 0.5f,
     val saveDir: String = "",
     val concurrentDownloads: Int = 2,
@@ -34,8 +34,8 @@ object SettingsStore {
         context.dataStore.data.map { p ->
             AppSettings(
                 themeMode = runCatching { ThemeMode.valueOf(p[KEY_THEME] ?: "SYSTEM") }.getOrDefault(ThemeMode.SYSTEM),
-                glassEnabled = p[KEY_GLASS] ?: false,
-                glassIntensity = p[KEY_GLASS_INTENSITY] ?: 0.5f,
+                glassEnabled = p[KEY_GLASS] ?: true,
+                glassIntensity = p[KEY_GLASS_INTENSITY]?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f,
                 saveDir = p[KEY_SAVE_DIR] ?: "",
                 concurrentDownloads = p[KEY_CONCURRENT] ?: 2,
                 wifiOnly = p[KEY_WIFI_ONLY] ?: false,
@@ -51,7 +51,7 @@ object SettingsStore {
     }
 
     suspend fun setGlassIntensity(context: Context, value: Float) {
-        context.dataStore.edit { it[KEY_GLASS_INTENSITY] = value.coerceIn(0f, 1f) }
+        context.dataStore.edit { it[KEY_GLASS_INTENSITY] = value.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f }
     }
 
     suspend fun setSaveDir(context: Context, uri: String) {

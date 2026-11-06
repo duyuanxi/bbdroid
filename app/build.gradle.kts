@@ -22,8 +22,9 @@ android {
         applicationId = "com.bbdroid.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.3.1"
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        versionCode = 5
+        versionName = "0.4.0"
     }
 
     signingConfigs {
@@ -69,6 +70,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.ui:ui:1.7.6")

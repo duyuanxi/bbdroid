@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
@@ -80,7 +79,7 @@ object ReDownloadRequest {
     fun request(b: String) { bvid = b; id++ }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
@@ -386,41 +385,44 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
     val loggedIn = Auth.isLoggedIn(BiliApi.cookie)
 
     Column(
-        modifier = modifier.padding(16.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(top = 12.dp, bottom = LocalPageBottomInset.current + 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        PageHeading("下载视频", "将喜欢的视频，保存到你的设备。")
         // 账号行（紧凑）
-        LoginRow(userFace = userFace, loggedIn = loggedIn, userName = userName, onLogin = { qrLoginLauncher.launch(Intent(context, QrLoginActivity::class.java)) })
+        AppCard(Modifier.fillMaxWidth()) {
+            Box(Modifier.padding(20.dp)) {
+                LoginRow(userFace = userFace, loggedIn = loggedIn, userName = userName, onLogin = { qrLoginLauncher.launch(Intent(context, QrLoginActivity::class.java)) })
+            }
+        }
 
-        // 链接解析卡
-        Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-            Row(
-                Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+        AppCard(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("视频链接", style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(
                     value = biliInput,
                     onValueChange = { biliInput = it },
-                    label = { Text("粘贴链接 / BV号 / av号") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("粘贴 B 站链接、BV 号或 av 号") },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                FilledTonalButton(
-                    enabled = biliInput.isNotBlank(),
+                Button(
+                    enabled = biliInput.isNotBlank() || biliRunning,
                     onClick = {
                         if (biliRunning) { parseJob?.cancel(); biliRunning = false; biliResult = "已停止解析" }
                         else parseUrl(biliInput)
-                    }
-                ) { Text(if (biliRunning) "停止" else "解析") }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                ) { Text(if (biliRunning) "停止解析" else "解析视频") }
+                if (biliRunning) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
         }
 
         // 解析结果卡
         val d = parsed
         if (d != null) {
-            Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (cover != null) {
                         Image(
                             cover!!.asImageBitmap(),
@@ -443,7 +445,7 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
                     Text("清晰度", style = MaterialTheme.typography.titleSmall)
                     QualityGrid(videos = d.videos, selectedIdx = selectedVideoIdx, enabled = !downloading, onSelect = { selectedVideoIdx = it })
                     // 附赠选项
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ExtraCheck("弹幕", extraDanmaku, { extraDanmaku = it })
                         ExtraCheck("封面", extraCover, { extraCover = it })
                         ExtraCheck("字幕", extraSubtitle, { extraSubtitle = it })
@@ -471,8 +473,8 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
 
         // 纯合集/列表（无单视频解析结果）
         if (collectionItems.isNotEmpty() && parsed == null) {
-            Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppCard(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(collectionTitle, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text("共 " + collectionItems.size + " 个视频", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(
@@ -597,8 +599,8 @@ private fun ExtraCheck(label: String, checked: Boolean, onToggle: (Boolean) -> U
 
 @Composable
 private fun InProgressCard(title: String, pct: Float, info: String, paused: Boolean, onTogglePause: () -> Unit, onStop: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 IconButton(onClick = onTogglePause) {
@@ -618,8 +620,8 @@ private fun InProgressCard(title: String, pct: Float, info: String, paused: Bool
 
 @Composable
 private fun BatchTaskCard(tasks: List<DownloadTask>, status: String, onStop: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().then(glassPanel())) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("批量队列", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 TextButton(onClick = onStop) { Text("停止", color = MaterialTheme.colorScheme.onSurfaceVariant) }
