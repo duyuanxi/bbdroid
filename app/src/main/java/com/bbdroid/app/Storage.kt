@@ -18,7 +18,7 @@ object Storage {
         return if (Build.VERSION.SDK_INT >= 29) {
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, displayName)
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                put(MediaStore.Video.Media.MIME_TYPE, mimeOf(displayName))
                 put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/BBDroid")
             }
             val uri = context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
@@ -64,7 +64,7 @@ object Storage {
         if (Build.VERSION.SDK_INT >= 29) {
             val values = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, displayName)
-                put(MediaStore.Downloads.MIME_TYPE, "video/mp4")
+                put(MediaStore.Downloads.MIME_TYPE, mimeOf(displayName))
                 put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/BBDroid/视频")
             }
             val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
@@ -87,7 +87,7 @@ object Storage {
         if (dir.isEmpty()) return saveVideoDefault(context, file, displayName)
         return try {
             val tree = DocumentFile.fromTreeUri(context, Uri.parse(dir))
-            val doc = tree?.createFile("video/mp4", displayName) ?: throw Exception("无法写入所选文件夹")
+            val doc = tree?.createFile(mimeOf(displayName), displayName) ?: throw Exception("无法写入所选文件夹")
             context.contentResolver.openOutputStream(doc.uri)!!.use { out ->
                 file.inputStream().use { input -> input.copyTo(out) }
             }
@@ -100,6 +100,21 @@ object Storage {
     private fun mimeOf(name: String): String {
         val ext = name.substringAfterLast('.', "").lowercase()
         return when (ext) {
+            "mp4", "m4v" -> "video/mp4"
+            "mkv" -> "video/x-matroska"
+            "mov" -> "video/quicktime"
+            "avi" -> "video/x-msvideo"
+            "flv" -> "video/x-flv"
+            "wmv" -> "video/x-ms-wmv"
+            "webm" -> "video/webm"
+            "ts" -> "video/mp2t"
+            "mp3" -> "audio/mpeg"
+            "aac" -> "audio/aac"
+            "flac" -> "audio/flac"
+            "wav" -> "audio/wav"
+            "ogg" -> "audio/ogg"
+            "m4a" -> "audio/mp4"
+            "gif" -> "image/gif"
             "jpg", "jpeg" -> "image/jpeg"
             "png" -> "image/png"
             "xml" -> "application/xml"

@@ -16,7 +16,7 @@
   - 转码（H.264/H.265/AV1，CRF/码率/分辨率/帧率/音频参数）
   - 封装/分离、剪辑、滤镜、压缩，ffprobe 元信息
   - 单文件 / 批量 / 文件夹导入
-- **主题**：普通主题 / 液态玻璃主题（可调折光强度）
+- **主题**：中性分组界面 / 液态玻璃悬浮导航（可调材质强度）
 
 ## 技术栈
 
@@ -26,8 +26,12 @@ Kotlin · Jetpack Compose (Material3) · ffmpegkit-maintained（FFmpeg AAR）· 
 
 要求：JDK 17+、Android SDK（compileSdk 34 / build-tools）。
 
+支持 Android 7.0+ 的 **arm64-v8a / x86_64 64 位系统**。本地 AAR 不含 armeabi-v7a / x86 库，构建通过 ABI filters 限定为 64 位；32 位系统不支持。
+
+液态玻璃采用中性背景，在悬浮导航内采样真实页面；Android 12+ 支持实时背景模糊，较旧系统使用更实的半透明材质。文字和按钮不参与模糊，弹窗保持清晰。
+
 ```bash
-# 未签名 Debug（16KB 页面对齐用于较新设备）
+# Debug（使用调试签名）
 ./gradlew assembleDebug
 
 # Release（需先配置签名，见下）
@@ -49,6 +53,17 @@ keyPassword=你的密码
 ```
 
 把对应的 .keystore 放到 app/ 下即可（两个文件都在 .gitignore 中，不会被提交）。
+
+## 验证
+
+```bash
+./gradlew testDebugUnitTest lintDebug assembleDebug
+python3 scripts/verify_ffmpeg_aar.py
+```
+
+在设备中打开“设置 → FFmpeg 引擎自检”，无需导入文件即可实际验证短片编码、FFprobe 和无损音视频封装。构建／静态检查不能代替设备上的原生执行验证。
+
+更新内容见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 目录结构
 

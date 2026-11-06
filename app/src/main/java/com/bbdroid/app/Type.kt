@@ -28,6 +28,8 @@ private fun style(
 )
 
 val AppTypography = Typography(
+    headlineMedium = style(FontWeight.Bold, 30, 38),
+    headlineSmall = style(FontWeight.Bold, 26, 34),
     titleLarge = style(FontWeight.SemiBold, 22, 28),
     titleMedium = style(FontWeight.SemiBold, 16, 24, 0.15f),
     titleSmall = style(FontWeight.SemiBold, 14, 20, 0.1f),

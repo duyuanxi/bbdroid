@@ -35,11 +35,14 @@ object Downloader {
         onProgress("合并音视频...")
         onBytes?.invoke(-1L, -1L)
         val out = File(outputDir, "merged.mp4")
-        val cmd = "-i \"" + v.absolutePath + "\" -i \"" + a.absolutePath + "\" -c copy \"" + out.absolutePath + "\" -y"
-        val r = FFmpegEngine.run(cmd)
+        val r = FFmpegEngine.run(listOf("-y", "-i", v.absolutePath, "-i", a.absolutePath,
+            "-map", "0:v:0", "-map", "1:a:0", "-c", "copy", out.absolutePath))
+        if (!r.success || !out.exists() || out.length() == 0L) {
+            out.delete()
+            throw Exception("音视频合并失败：" + r.output.takeLast(1800))
+        }
         v.delete()
         a.delete()
-        if (!r.success) throw Exception("合并失败 (流无效或数据损坏): " + r.output.takeLast(300))
         out
     }
 
