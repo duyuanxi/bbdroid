@@ -7,6 +7,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import com.bbdroid.app.bilibili.DownloadControl
 
 // 进行中的下载任务（历史页显示进度，批量/合集为层级：父任务总进度 + 子任务单条进度）
 data class DownloadTask(
@@ -25,6 +28,7 @@ object DownloadSession {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     val downloadingState = mutableStateOf(false)
+    val stoppingState = mutableStateOf(false)
     val progressPctState = mutableStateOf(-1f)
     val progressInfoState = mutableStateOf("")
     val downloadStatusState = mutableStateOf("")
@@ -44,6 +48,29 @@ object DownloadSession {
 
     // 进行中的下载任务（历史页显示进度）
     val tasks = mutableStateListOf<DownloadTask>()
+
+    fun stopAll() {
+        if (stoppingState.value) return
+        stoppingState.value = true
+        DownloadControl.cancel()
+        val jobs = listOfNotNull(downloadJobState.value, batchJobState.value, collectionJobState.value)
+        jobs.forEach { it.cancel() }
+        scope.launch {
+            try {
+                jobs.joinAll()
+                downloadingState.value = false
+                batchRunningState.value = false
+                collectionRunningState.value = false
+                downloadJobState.value = null
+                batchJobState.value = null
+                collectionJobState.value = null
+                downloadStatusState.value = "⏹ 已停止"
+                batchStatusState.value = ""
+                collectionStatusState.value = ""
+                clearTasks()
+            } finally { stoppingState.value = false }
+        }
+    }
 
     fun upsertTask(t: DownloadTask) {
         val i = tasks.indexOfFirst { it.key == t.key }

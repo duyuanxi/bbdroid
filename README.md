@@ -8,13 +8,15 @@ B 站视频下载器 + FFmpeg 工具箱，把视频保存、格式转换和文�
 
 [下载 APK](https://github.com/duyuanxi/bbdroid/releases/latest) · [功能亮点](#功能亮点) · [界面预览](#界面预览) · [快速上手](#快速上手) · [源码构建](#源码构建)
 
-**Android 7.0+ · Kotlin · Jetpack Compose · FFmpeg**
+**v0.4.0 · Android 7.0+ · 64 位 ARM / x86 · Kotlin · Jetpack Compose · FFmpeg**
 
 ![BBDroid 宣传海报：下载、转码，一站完成，展示下载页与 FFmpeg 工具箱](docs/images/bbdroid-poster.png)
 
 </div>
 
 ## 功能亮点
+
+v0.4.0 修复了音频转换、输出类型和取消下载等问题，并重新设计了浅色与深色玻璃界面。详见 [更新记录](CHANGELOG.md) 与 [验证记录](docs/verification-v0.4.0.md)。
 
 ### 喜欢的内容，一次保存
 
@@ -46,13 +48,13 @@ B 站视频下载器 + FFmpeg 工具箱，把视频保存、格式转换和文�
 ### 保存、查找、分享，顺手完成
 
 - **下载历史**：集中查看已保存内容，打开播放、分享或重新下载。
-- **自定义保存位置**：默认视频目录为 `Download/BBDroid/视频/`，也可在设置中选择文件夹。
+- **自定义保存位置**：默认视频、音频、图片分别保存到 `Download/BBDroid/视频/`、`Download/BBDroid/音频/`、`Download/BBDroid/图片/`，也可在设置中选择文件夹。
 - **附赠文件独立保存**：Android 10 及以上将封面、弹幕和字幕写入 `Download/BBDroid/附赠/`。
-- **按习惯选择外观**：浅色、深色、跟随系统，以及可调强度的液态玻璃主题。
+- **按习惯选择外观**：浅色、深色、跟随系统，以及可调强度的玻璃主题；以冷白、银灰和蓝色搭配柔和背景模糊与边缘高光。
 
 ## 界面预览
 
-以下为本地开发构建的真实运行截图，采集于 Android 模拟器；发布版界面以对应安装包为准。海报基于下载页与工具箱截图制作。
+以下为 v0.4.0 代码的真实运行截图，采集于 Android 14 模拟器。顶部宣传海报沿用上一版素材。
 
 <table>
   <tr>
@@ -67,9 +69,16 @@ B 站视频下载器 + FFmpeg 工具箱，把视频保存、格式转换和文�
   </tr>
 </table>
 
+<details>
+<summary>深色界面、设置与转换结果</summary>
+
+<img src="docs/images/dark.png" alt="BBDroid 深色玻璃界面" width="260"> <img src="docs/images/settings.png" alt="BBDroid 设置" width="260"> <img src="docs/images/conversion-done.png" alt="BBDroid 成功转换 MP3 后的保存与分享入口" width="260">
+
+</details>
+
 ## 快速上手
 
-1. 前往 [Releases](https://github.com/duyuanxi/bbdroid/releases/latest)，下载 `app-release.apk` 并安装。最低支持 Android 7.0（API 24）。
+1. 前往 [Releases](https://github.com/duyuanxi/bbdroid/releases/latest)，下载 `BBDroid-v0.4.0.apk` 并安装。支持 Android 7.0（API 24）及以上的 **64 位**设备（`arm64-v8a` / `x86_64`）。沿用 BBDroid 原签名，可直接覆盖升级。
 2. 打开下载页，粘贴 B 站视频链接、BV 号或 av 号并解析。需要账号权限的内容先在设置中登录。
 3. 选择分 P、画质、编码及附赠内容，下载单条视频或加入批量队列。
 4. 完成后打开或分享文件；需要调整格式、体积或片段时，选择「导入转码」。
@@ -84,6 +93,7 @@ B 站视频下载器 + FFmpeg 工具箱，把视频保存、格式转换和文�
 - Android SDK 34；项目的 `compileSdk` 与 `targetSdk` 均为 34，`minSdk` 为 24。
 - 使用仓库自带的 Gradle Wrapper。
 - 本地 FFmpeg AAR：[`app/libs/ffmpeg-kit-full-gpl-8.1.7.aar`](app/libs/ffmpeg-kit-full-gpl-8.1.7.aar)，已随仓库提供。
+- AAR 内置 FFmpeg 原生库仅提供 `arm64-v8a` / `x86_64`；构建已限制为这两种 ABI，避免在 32 位设备上安装后无法加载引擎。
 
 在项目根目录运行：
 
@@ -101,6 +111,16 @@ bash ./gradlew :app:assembleDebug
 ```
 
 Debug 输出位于 `app/build/outputs/apk/debug/app-debug.apk`。生成已签名的 Release 安装包，需要先完成下面的签名配置。
+
+### 验证
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest :app:lintDebug
+# 连接独立测试设备或模拟器后运行：
+.\gradlew.bat :app:connectedDebugAndroidTest
+```
+
+测试覆盖 15 种输出格式的实际转换、剪辑、分辨率和帧率、中文及引号文件名、音频 MIME、同名导入、转换取消、页面切换，以及下载分片完整性与取消。完整范围和限制见 [验证记录](docs/verification-v0.4.0.md)。
 
 ### Release 签名
 
@@ -123,6 +143,7 @@ app/src/main/java/com/bbdroid/app/
 ├── DownloadTab.kt        # 视频解析、分 P 与批量下载
 ├── Downloader.kt         # 音视频下载、合并与附赠内容
 ├── ToolboxTab.kt         # 文件导入、转码参数与媒体信息
+├── ToolboxSession.kt     # 跨页面保存的转换任务与取消控制
 ├── FfmpegOptions.kt      # 输出格式、编码与命令构建
 ├── FFmpegEngine.kt       # FFmpeg 引擎调用
 ├── HistoryTab.kt         # 下载历史、打开与分享

@@ -23,13 +23,21 @@ class SpeedTracker(private val windowMs: Long = 2000) {
 }
 
 fun copyToCache(context: Context, uri: Uri): File {
-    val name = queryDisplayName(context, uri) ?: "input"
-    val ext = name.substringAfterLast('.', "bin")
-    val dest = File(context.cacheDir, "input_" + System.currentTimeMillis() + "." + ext)
-    context.contentResolver.openInputStream(uri)?.use { input ->
-        dest.outputStream().use { output -> input.copyTo(output) }
+    val name = sanitizeFilename(queryDisplayName(context, uri) ?: "input.bin")
+    val directory = File(context.cacheDir, "imports/" + java.util.UUID.randomUUID()).apply {
+        check(mkdirs()) { "无法创建导入目录" }
     }
-    return dest
+    val dest = File(directory, name)
+    try {
+        val stream = context.contentResolver.openInputStream(uri) ?: error("无法读取所选文件")
+        stream.use { input -> dest.outputStream().use { input.copyTo(it) } }
+        require(dest.length() > 0) { "所选文件为空" }
+        return dest
+    } catch (e: Exception) {
+        dest.delete()
+        directory.delete()
+        throw e
+    }
 }
 
 fun queryDisplayName(context: Context, uri: Uri): String? {
@@ -42,11 +50,11 @@ fun queryDisplayName(context: Context, uri: Uri): String? {
 }
 
 fun sanitizeFilename(name: String): String {
-    var n = name.replace("/", "_").replace(":", "_").replace("*", "_")
-        .replace("?", "_").replace("<", "_").replace(">", "_").replace("|", "_").trim()
-    if (n.isEmpty()) n = "video"
-    if (n.length > 80) n = n.take(80)
-    return n
+    val safe = name.map { if (it in "\\/:*?\"<>|" || it.code < 32) '_' else it }.joinToString("").trim().trim('.')
+    if (safe.isEmpty()) return "video"
+    if (safe.length <= 120) return safe
+    val extension = safe.substringAfterLast('.', "").take(12)
+    return safe.take(100) + if (extension.isEmpty()) "" else ".$extension"
 }
 
 suspend fun runTests(input: File, dir: File, onLog: (String) -> Unit) {
@@ -65,7 +73,7 @@ suspend fun runTests(input: File, dir: File, onLog: (String) -> Unit) {
         "分离音频轨" to "-i \"" + inPath + "\" -vn -c:a copy \"" + a.absolutePath + "\" -y",
         "合并音视频" to "-i \"" + v.absolutePath + "\" -i \"" + a.absolutePath + "\" -c copy \"" + mux.absolutePath + "\" -y",
         "剪切前10秒" to "-ss 0 -t 10 -i \"" + inPath + "\" -c copy \"" + cut.absolutePath + "\" -y",
-        "滤镜旋转90°" to "-i \"" + inPath + "\" -vf \"rotate=90\" -c:a aac \"" + rot.absolutePath + "\" -y",
+        "滤镜旋转90°" to "-i \"" + inPath + "\" -vf \"transpose=1\" -c:a aac \"" + rot.absolutePath + "\" -y",
     )
     for ((name, cmd) in tests) {
         onLog("▶ " + name)

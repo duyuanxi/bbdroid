@@ -1,7 +1,7 @@
 # README 图片素材
 
-- `download.png`、`toolbox.png`、`history.png`：通过 ADB 从 Android 模拟器中运行的 `com.bbdroid.app` 截取，原始尺寸 1080 × 2400。本地开发构建的界面与发布安装包分别说明，不将其标注为某个 Release 的界面。
-- `bbdroid-poster.png`：使用内置 imagegen 工具生成，以 `download.png`、`toolbox.png` 为合成素材。海报用于宣传，原始界面截图另行保留在 README 中。
+- `download.png`、`toolbox.png`、`history.png`、`dark.png`、`settings.png`、`conversion-done.png`：v0.4.0 代码通过 Android 仪器测试从 `com.bbdroid.app` 真实运行界面截取，原始尺寸 1080 × 2400。模拟器为 Android 14 x86_64；其中转换结果为实际生成并保存的 MP3。
+- `bbdroid-poster.png`：沿用上一版的宣传海报，使用内置 imagegen 工具生成，合成素材为当时的下载页与工具箱截图。当前版本界面以本目录独立截图为准。
 
 ## 海报生成提示词
 

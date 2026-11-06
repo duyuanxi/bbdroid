@@ -73,9 +73,14 @@ fun HistoryTab(context: Context, modifier: Modifier = Modifier, onGoDownload: ()
 
     LazyColumn(
         modifier = modifier,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 22.dp, end = 22.dp, top = 6.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        item { PageIntro("每一份收藏，都有迹可循", "下载进度与已保存的文件，集中管理。") }
+        if (DownloadSession.tasks.isNotEmpty()) {
+            item { Text("正在下载", style = MaterialTheme.typography.titleMedium) }
+            items(DownloadSession.tasks, key = { "active-${it.key}" }) { task -> ActiveDownloadCard(task) }
+        }
         // 标题行
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -89,7 +94,7 @@ fun HistoryTab(context: Context, modifier: Modifier = Modifier, onGoDownload: ()
                 EmptyHistory(onGoDownload)
             }
         } else {
-            items(entries, key = { it.item.id to it.item.time }) { e ->
+            items(entries, key = { "history-${it.item.id}-${it.item.time}" }) { e ->
                 key(e.item.id, e.item.time) {
                     SwipeableHistoryCard(
                         entry = e,
@@ -194,7 +199,7 @@ private fun SwipeableHistoryCard(entry: History.Entry, onClick: () -> Unit, onSw
 @Composable
 private fun HistoryCardContent(entry: History.Entry, onClick: () -> Unit) {
     val exists = entry.exists
-    Card(
+    AppCard(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
@@ -312,5 +317,17 @@ private fun fmtSize(bytes: Long): String {
         bytes >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / 1024.0 / 1024.0)
         bytes >= 1024 -> String.format(Locale.US, "%.0f KB", bytes / 1024.0)
         else -> bytes.toString() + " B"
+    }
+}
+
+@Composable
+private fun ActiveDownloadCard(task: DownloadTask) {
+    AppCard(Modifier.fillMaxWidth().padding(start = if (task.parentKey == null) 0.dp else 16.dp)) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Text(task.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(task.status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            if (task.progress < 0) androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth())
+            else androidx.compose.material3.LinearProgressIndicator(progress = { task.progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+        }
     }
 }

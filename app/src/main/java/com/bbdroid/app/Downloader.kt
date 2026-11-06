@@ -7,6 +7,8 @@ import com.bbdroid.app.bilibili.DownloadControl
 import com.bbdroid.app.bilibili.VideoInfo
 import com.bbdroid.app.bilibili.VideoTrack
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -19,28 +21,36 @@ object Downloader {
         onProgress: (String) -> Unit,
         onBytes: ((Long, Long) -> Unit)? = null,
     ): File = withContext(Dispatchers.IO) {
-        val v = File(outputDir, "dl_video.m4s")
-        val a = File(outputDir, "dl_audio.m4s")
-        onProgress("下载视频流 (" + video.dfn + " " + video.resolution + ")...")
-        var vidTotal = -1L
-        downloadStream(video.urls.ifEmpty { listOf(video.baseUrl) }, v) { d, t ->
-            vidTotal = t
-            onBytes?.invoke(d, t)
+        val id = java.util.UUID.randomUUID().toString()
+        val v = File(outputDir, "$id-video.m4s")
+        val a = File(outputDir, "$id-audio.m4s")
+        val out = File(outputDir, "$id-merged.mp4")
+        try {
+            onProgress("下载视频流 (${video.dfn} ${video.resolution})…")
+            var vidTotal = -1L
+            downloadStream(video.urls.ifEmpty { listOf(video.baseUrl) }, v) { d, t ->
+                vidTotal = t
+                onBytes?.invoke(d, t)
+            }
+            onProgress("下载音频流…")
+            downloadStream(audio.urls.ifEmpty { listOf(audio.baseUrl) }, a) { d, t ->
+                if (vidTotal > 0 && t > 0) onBytes?.invoke(vidTotal + d, vidTotal + t)
+                else onBytes?.invoke(d, t)
+            }
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            onProgress("合并音视频…")
+            onBytes?.invoke(-1L, -1L)
+            val result = FFmpegEngine.run(listOf("-hide_banner", "-y", "-i", v.absolutePath, "-i", a.absolutePath,
+                "-map", "0:v:0", "-map", "1:a:0", "-c", "copy", "-movflags", "+faststart", out.absolutePath))
+            check(result.success && out.length() > 0) { "合并失败：${result.output.takeLast(1200)}" }
+            out
+        } catch (e: Exception) {
+            out.delete()
+            throw e
+        } finally {
+            v.delete()
+            a.delete()
         }
-        onProgress("下载音频流...")
-        downloadStream(audio.urls.ifEmpty { listOf(audio.baseUrl) }, a) { d, t ->
-            if (vidTotal > 0 && t > 0) onBytes?.invoke(vidTotal + d, vidTotal + t)
-            else onBytes?.invoke(d, t)
-        }
-        onProgress("合并音视频...")
-        onBytes?.invoke(-1L, -1L)
-        val out = File(outputDir, "merged.mp4")
-        val cmd = "-i \"" + v.absolutePath + "\" -i \"" + a.absolutePath + "\" -c copy \"" + out.absolutePath + "\" -y"
-        val r = FFmpegEngine.run(cmd)
-        v.delete()
-        a.delete()
-        if (!r.success) throw Exception("合并失败 (流无效或数据损坏): " + r.output.takeLast(300))
-        out
     }
 
     // 用并行分段下载音视频流，若文件无效（CDN 返回错误页或数据损坏）则回退到可靠的单连接重下
@@ -54,7 +64,8 @@ object Downloader {
                 BiliApi.downloadFile(u, dest, onProgress)
                 if (isValidMedia(dest)) return
                 dest.delete()
-            } catch (e: Exception) { dest.delete() }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { dest.delete() }
         }
         throw Exception("视频流下载无效（可能是链接过期或CDN异常），请重试或换清晰度")
     }
@@ -64,7 +75,7 @@ object Downloader {
         if (!f.exists() || f.length() < 64) return false
         val head = ByteArray(1024)
         val n = f.inputStream().use { it.read(head) }
-        if (n < 4) return false
+        if (n < 8) return false
         val type = String(head, 4, 4, Charsets.ISO_8859_1)
         val s = String(head, 0, n, Charsets.ISO_8859_1)
         return type in setOf("ftyp", "styp", "moov", "moof", "mdat", "free", "skip", "wide", "pdin", "emsg", "sidx") ||
@@ -93,7 +104,8 @@ object Downloader {
                 BiliApi.downloadFile(info.pic, f)
                 msgs.add(Storage.saveToDownloads(context, f, base + ".jpg").display)
                 f.delete()
-            } catch (e: Exception) {}
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {}
         }
         // 弹幕
         if (danmaku) {
@@ -103,7 +115,8 @@ object Downloader {
                 BiliApi.downloadDanmaku(cid, dm)
                 msgs.add(Storage.saveToDownloads(context, dm, base + ".xml").display)
                 dm.delete()
-            } catch (e: Exception) {}
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {}
         }
         // 字幕
         if (subtitle) {
@@ -122,7 +135,8 @@ object Downloader {
                         sf.delete()
                     }
                 }
-            } catch (e: Exception) {}
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {}
         }
         if (msgs.isEmpty()) "无封面/弹幕/字幕" else msgs.joinToString(", ")
     }

@@ -22,8 +22,10 @@ android {
         applicationId = "com.bbdroid.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.3.1"
+        versionCode = 5
+        versionName = "0.4.0"
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -92,4 +94,10 @@ dependencies {
     implementation(files("libs/ffmpeg-kit-full-gpl-8.1.7.aar"))
     // FFmpegKit 运行依赖（提供 com.arthenica.smartexception.java.Exceptions）
     implementation("com.arthenica:smart-exception-java:0.2.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.7.6")
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.7.6")
 }

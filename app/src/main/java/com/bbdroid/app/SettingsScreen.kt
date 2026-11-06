@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
@@ -76,7 +77,11 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
     val webLoginLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshLogin() }
     val qrLoginLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshLogin() }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { val f = copyToCache(context, it); pickedFile = f; testLog = "" }
+        uri?.let { scope.launch {
+            try { pickedFile = withContext(Dispatchers.IO) { copyToCache(context, it) }; testLog = "" }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { testLog = "导入失败：${e.message}" }
+        } }
     }
     val saveDirPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         uri?.let {
@@ -86,13 +91,13 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
     }
 
     // 真正尝试加载 ffmpeg-kit 原生库并读取版本；失败时把真实异常暴露到界面上
-    val ffmpegDiag = remember {
-        runCatching { com.arthenica.ffmpegkit.FFmpegKitConfig.getVersion() }
-            .fold(
-                onSuccess = { "可用 · " + it },
-                onFailure = { "不可用 · " + (it.message ?: it.toString()) },
-            )
+    val ffmpegDiag by produceState("正在检测…") {
+        value = withContext(Dispatchers.IO) {
+            runCatching { com.arthenica.ffmpegkit.FFmpegKitConfig.getVersion() }
+                .fold(onSuccess = { "可用 · $it" }, onFailure = { "不可用 · ${it.message ?: it.toString()}" })
+        }
     }
+
     val deviceAbis = remember { android.os.Build.SUPPORTED_ABIS.joinToString(", ") }
 
     Column(
@@ -110,7 +115,7 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
         }
 
         // 账号
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AppCard(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("账号", style = MaterialTheme.typography.titleMedium)
                 Text("状态: " + loginStatus + (if (userName.isNotEmpty()) "（" + userName + "）" else ""), style = MaterialTheme.typography.bodyMedium)
@@ -122,7 +127,7 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
         }
 
         // 主题
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AppCard(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("主题模式", style = MaterialTheme.typography.titleMedium)
                 val modes = listOf("跟随系统" to ThemeMode.SYSTEM, "浅色" to ThemeMode.LIGHT, "深色" to ThemeMode.DARK)
@@ -139,7 +144,7 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("液态玻璃皮肤", style = MaterialTheme.typography.bodyMedium)
-                        Text("半透明玻璃面板 + 渐变底色（可选）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("柔和模糊、透明材质与边缘高光", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(
                         checked = settings.glassEnabled,
@@ -148,7 +153,7 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
                 }
                 if (settings.glassEnabled) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("折光强度", style = MaterialTheme.typography.bodyMedium)
+                        Text("材质强度", style = MaterialTheme.typography.bodyMedium)
                         Slider(
                             value = settings.glassIntensity,
                             onValueChange = { scope.launch { SettingsStore.setGlassIntensity(context, it) } },
@@ -162,7 +167,7 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
         }
 
         // 下载
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AppCard(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("下载", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -201,7 +206,7 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
         }
 
         // FFmpeg 引擎自检
-        Card(modifier = Modifier.fillMaxWidth()) {
+        AppCard(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("FFmpeg 引擎自检", style = MaterialTheme.typography.titleMedium)
                 Text("引擎: " + ffmpegDiag, style = MaterialTheme.typography.bodySmall)
@@ -217,7 +222,7 @@ fun SettingsContent(context: Context, onBack: () -> Unit) {
                             runTests(f, dir) { l -> testLog += l + "\n" }
                         }
                     },
-                ) { Text("运行 5 项测试") }
+                ) { Text("运行 6 项测试") }
                 if (testLog.isNotEmpty()) Text(testLog, style = MaterialTheme.typography.labelSmall)
             }
         }

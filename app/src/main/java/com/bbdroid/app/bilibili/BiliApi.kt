@@ -1,6 +1,9 @@
 package com.bbdroid.app.bilibili
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -21,7 +24,10 @@ object DownloadControl {
     @kotlin.jvm.Volatile
     var paused = false
     fun reset() { cancelled = false; paused = false }
-    fun cancel() { cancelled = true }
+    private val calls = java.util.concurrent.ConcurrentHashMap.newKeySet<okhttp3.Call>()
+    fun track(call: okhttp3.Call) { calls.add(call); if (cancelled) call.cancel() }
+    fun untrack(call: okhttp3.Call) { calls.remove(call) }
+    fun cancel() { cancelled = true; paused = false; calls.forEach { it.cancel() } }
     fun pause() { paused = true }
     fun resume() { paused = false }
 }
@@ -248,24 +254,36 @@ object BiliApi {
     }
 
     // 下载文件（带 Referer，B站 CDN 需要），onProgress 回调 (已下载字节, 总字节，-1 表示未知)
+    private inline fun <T> downloadResponse(call: okhttp3.Call, block: (okhttp3.Response) -> T): T {
+        if (DownloadControl.cancelled) throw CancellationException("已取消下载")
+        DownloadControl.track(call)
+        try { return call.execute().use(block) }
+        catch (e: java.io.IOException) {
+            if (DownloadControl.cancelled) throw CancellationException("已取消下载").apply { initCause(e) }
+            throw e
+        } finally { DownloadControl.untrack(call) }
+    }
+
     fun downloadFile(url: String, dest: File, onProgress: ((Long, Long) -> Unit)? = null) {
         val b = Request.Builder().url(url)
             .header("User-Agent", userAgent)
             .header("Referer", "https://www.bilibili.com/")
         val ch = buildCookieHeader()
         if (ch.isNotEmpty()) b.header("Cookie", ch)
-        client.newCall(b.build()).execute().use { resp ->
+        downloadResponse(client.newCall(b.build())) { resp ->
             if (!resp.isSuccessful) throw Exception("下载失败 HTTP " + resp.code)
             dest.parentFile?.mkdirs()
-            val total = resp.body?.contentLength() ?: -1L
+            val body = resp.body ?: throw Exception("下载响应为空")
+            val total = body.contentLength()
+            var downloaded = 0L
             dest.outputStream().use { out ->
-                resp.body?.byteStream()?.use { input ->
+                body.byteStream().use { input ->
                     val buf = ByteArray(64 * 1024)
-                    var downloaded = 0L
                     var read = input.read(buf)
                     while (read != -1) {
-                        if (DownloadControl.cancelled) throw Exception("已取消下载")
+                        if (DownloadControl.cancelled) throw CancellationException("已取消下载")
                         while (DownloadControl.paused && !DownloadControl.cancelled) Thread.sleep(100)
+                        if (DownloadControl.cancelled) throw CancellationException("已取消下载")
                         out.write(buf, 0, read)
                         downloaded += read
                         onProgress?.invoke(downloaded, total)
@@ -273,6 +291,7 @@ object BiliApi {
                     }
                 }
             }
+            check(downloaded > 0 && (total < 0 || downloaded == total)) { "下载文件不完整" }
         }
     }
 
@@ -285,12 +304,13 @@ object BiliApi {
                 .header("Referer", "https://www.bilibili.com/")
             val ch = buildCookieHeader()
             if (ch.isNotEmpty()) b.header("Cookie", ch)
-            client.newCall(b.build()).execute().use { resp ->
+            downloadResponse(client.newCall(b.build())) { resp ->
                 val cr = resp.header("Content-Range")
                 if (cr != null && cr.contains("/")) cr.substringAfterLast("/").toLongOrNull() ?: -1L
                 else resp.body?.contentLength() ?: -1L
             }
-        } catch (e: Exception) { -1L }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { -1L }
     }
 
     // 下载一个字节区间（Range），边读边上报字节数
@@ -301,87 +321,111 @@ object BiliApi {
             .header("Referer", "https://www.bilibili.com/")
         val ch = buildCookieHeader()
         if (ch.isNotEmpty()) b.header("Cookie", ch)
-        parallelClient.newCall(b.build()).execute().use { resp ->
+        downloadResponse(parallelClient.newCall(b.build())) { resp ->
             if (resp.code != 206) throw Exception("RANGE_UNSUPPORTED " + resp.code)
+            check(resp.header("Content-Range")?.substringBefore('/') == "bytes $start-$end") { "服务器返回的分片范围不匹配" }
+            var downloaded = 0L
             dest.outputStream().use { out ->
                 resp.body?.byteStream()?.use { input ->
                     val buf = ByteArray(64 * 1024)
                     var read = input.read(buf)
                     while (read != -1) {
-                        if (DownloadControl.cancelled) throw Exception("已取消下载")
+                        if (DownloadControl.cancelled) throw CancellationException("已取消下载")
                         while (DownloadControl.paused && !DownloadControl.cancelled) Thread.sleep(100)
+                        if (DownloadControl.cancelled) throw CancellationException("已取消下载")
                         out.write(buf, 0, read)
+                        downloaded += read
                         onRead?.invoke(read.toLong())
                         read = input.read(buf)
                     }
                 }
             }
+            check(downloaded == end - start + 1) { "分片下载不完整" }
         }
     }
 
     // 分段并行下载（绕过单连接限速），带备用 CDN 节点自动切换
     suspend fun downloadFileParallel(urls: List<String>, dest: File, numChunks: Int = 4, onProgress: ((Long, Long) -> Unit)? = null) = withContext(Dispatchers.IO) {
         if (urls.isEmpty()) throw Exception("没有可用的下载地址")
-        var lastErr: Exception? = null
-        // 先尝试用每个节点做分段并行下载，任一失败就切下一个节点
-        for (url in urls) {
-            if (DownloadControl.cancelled) throw Exception("已取消下载")
-            if (downloadFileParallelOne(url, dest, numChunks, onProgress)) return@withContext
-            dest.delete()
-            lastErr = Exception("CDN 节点不可用")
-        }
-        // 所有节点分段都失败（多为 DNS/连接问题），用单连接重试每个节点
-        for (url in urls) {
-            try {
+        require(numChunks in 1..16) { "分片数应为 1 到 16" }
+        var completed = false
+        try {
+            var lastErr: Exception? = null
+            // 先尝试用每个节点做分段并行下载，任一失败就切下一个节点
+            for (url in urls) {
+                if (DownloadControl.cancelled) throw CancellationException("已取消下载")
+                if (downloadFileParallelOne(url, dest, numChunks, onProgress)) { completed = true; return@withContext }
                 dest.delete()
-                downloadFile(url, dest, onProgress)
-                return@withContext
-            } catch (e: Exception) {
-                lastErr = e
-                dest.delete()
+                lastErr = Exception("CDN 节点不可用")
             }
-        }
-        throw lastErr ?: Exception("下载失败")
+            // 所有节点分段都失败（多为 DNS/连接问题），用单连接重试每个节点
+            for (url in urls) {
+                try {
+                    dest.delete()
+                    downloadFile(url, dest, onProgress)
+                    completed = true
+                    return@withContext
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    lastErr = e
+                    dest.delete()
+                }
+            }
+            throw lastErr ?: Exception("下载失败")
+        } finally { if (!completed) dest.delete() }
     }
 
     // 用单个 CDN 节点做分段并行下载，成功返回 true，失败返回 false（不抛出）
     private suspend fun downloadFileParallelOne(url: String, dest: File, numChunks: Int, onProgress: ((Long, Long) -> Unit)?): Boolean {
-        if (DownloadControl.cancelled) return false
-        val total = try { getLength(url) } catch (e: Exception) { return false }
+        if (DownloadControl.cancelled) throw CancellationException("已取消下载")
+        val total = try { getLength(url) } catch (e: CancellationException) { throw e } catch (e: Exception) { return false }
         if (total <= 0) return false
         if (total <= 2 * 1024 * 1024 || numChunks <= 1) {
-            return try { downloadFile(url, dest, onProgress); true } catch (e: Exception) { false }
+            return try { downloadFile(url, dest, onProgress); true } catch (e: CancellationException) { throw e } catch (e: Exception) { false }
         }
         val chunkSize = (total + numChunks - 1) / numChunks
         val parts = (0 until numChunks).map { File(dest.parentFile, dest.name + ".part" + it) }
         val bytes = AtomicLongArray(numChunks)
         val ok = AtomicBoolean(true)
-        coroutineScope {
-            repeat(numChunks) { i ->
-                launch(Dispatchers.IO) {
-                    try {
-                        val start = i * chunkSize
-                        val end = minOf((i + 1) * chunkSize - 1, total - 1)
-                        downloadRange(url, start, end, parts[i]) { read ->
-                            bytes.addAndGet(i, read)
-                            var d = 0L
-                            for (j in 0 until numChunks) d += bytes.get(j)
-                            onProgress?.invoke(d, total)
+        try {
+            coroutineScope {
+                repeat(numChunks) { i ->
+                    launch(Dispatchers.IO) {
+                        try {
+                            val start = i * chunkSize
+                            val end = minOf((i + 1) * chunkSize - 1, total - 1)
+                            downloadRange(url, start, end, parts[i]) { read ->
+                                synchronized(bytes) {
+                                    bytes.addAndGet(i, read)
+                                    var d = 0L
+                                    for (j in 0 until numChunks) d += bytes.get(j)
+                                    onProgress?.invoke(d, total)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            ok.set(false)
                         }
-                    } catch (e: Exception) {
-                        ok.set(false)
                     }
                 }
             }
-        }
-        if (!ok.get()) { parts.forEach { it.delete() }; return false }
-        try {
-            dest.outputStream().use { out ->
-                for (p in parts) { if (p.exists()) { p.inputStream().use { it.copyTo(out) }; p.delete() } }
-            }
-            onProgress?.invoke(total, total)
-            return true
-        } catch (e: Exception) { parts.forEach { it.delete() }; return false }
+            currentCoroutineContext().ensureActive()
+            if (DownloadControl.cancelled) throw CancellationException("已取消下载")
+            if (!ok.get()) { parts.forEach { it.delete() }; return false }
+            try {
+                dest.outputStream().use { out ->
+                    for (p in parts) {
+                        currentCoroutineContext().ensureActive()
+                        if (DownloadControl.cancelled) throw CancellationException("已取消下载")
+                        check(p.isFile) { "下载分片缺失" }
+                        p.inputStream().use { it.copyTo(out) }
+                    }
+                }
+                check(dest.length() == total) { "合并分片后长度不一致" }
+                onProgress?.invoke(total, total)
+                return true
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { dest.delete(); return false }
+        } finally { parts.forEach { it.delete() } }
     }
 
     // 生成登录二维码，返回 (qrcodeKey, 二维码内容url)
