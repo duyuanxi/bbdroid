@@ -1,6 +1,6 @@
 # BBDroid
 
-**下载、转码，一站完成。**
+**下载、转码、鼓谱，一站完成。**
 
 B 站视频下载器 + FFmpeg 工具箱 + 在线鼓谱 PDF，把视频保存、格式转换、鼓谱整理和文件管理装进一个 Android 应用。
 
@@ -8,25 +8,25 @@ B 站视频下载器 + FFmpeg 工具箱 + 在线鼓谱 PDF，把视频保存、�
 
 **v0.5.0 · Android 7.0+ · 64 位 ARM / x86 · Kotlin · Jetpack Compose · FFmpeg**
 
-![BBDroid 宣传海报：下载、转码，一站完成，展示下载页与 FFmpeg 工具箱](https://github.com/user-attachments/assets/8bbe8615-cdd3-41e1-a198-e07bbb2c04e6)
+![BBDroid v0.5.0 宣传海报：视频下载、音视频转换与在线鼓谱 PDF](https://github.com/user-attachments/assets/178b4810-2a27-4e08-9466-5f5b6870956c)
 
 ## 界面预览
 
-以下为 v0.4.0 代码的真实运行截图，采集于 Android 14 模拟器。顶部宣传海报沿用上一版素材。
+以下界面均为 **v0.5.0**，运行环境为 Android 14 模拟器。下载、转换、历史、主题、设置与鼓谱入口均重新采集自正式发布的 APK。
 
-v0.5.0 新增鼓谱界面与 PDF 预览，使用自绘合成谱面验证，不是原曲谱面质量样例：
+PDF 分页与打印排版截图来自同版本的原生界面测试，使用自绘合成谱面展示预览功能。图片来源与海报提示词见 [素材说明](docs/images/v0.5.0/README.md)。
 
 | 鼓谱输入 | 分页预览 | 重新排版 |
 | :---: | :---: | :---: |
-| ![鼓谱链接与选项输入](https://raw.githubusercontent.com/duyuanxi/bbdroid/v0.5.0/docs/images/score-input.png) | ![原生 PDF 分页预览](https://raw.githubusercontent.com/duyuanxi/bbdroid/v0.5.0/docs/images/score-preview.png) | ![A5 打印预览](https://raw.githubusercontent.com/duyuanxi/bbdroid/v0.5.0/docs/images/score-layout.png) |
+| ![v0.5.0 鼓谱链接与选项输入](https://github.com/user-attachments/assets/1671e6f5-4689-4a6d-9778-c50349cf5f92) | ![v0.5.0 原生 PDF 分页预览（合成示例）](https://github.com/user-attachments/assets/860afc7c-db73-4d06-a273-c937db8e4014) | ![v0.5.0 A5 打印预览（合成示例）](https://github.com/user-attachments/assets/087fd349-a0bd-443c-91c0-00647cc19811) |
 
 | 视频下载 | FFmpeg 工具箱 | 下载历史 |
 | :---: | :---: | :---: |
-| ![BBDroid 下载页面真实截图](https://github.com/user-attachments/assets/c33d82e2-9af6-4bcf-8d98-da789e0101d4) | ![BBDroid 工具箱页面真实截图](https://github.com/user-attachments/assets/09b684be-3c78-4c3f-85f6-41392d00f9b4) | ![BBDroid 历史页面真实截图](https://github.com/user-attachments/assets/66a06caf-6881-4283-96ec-15654b66bd8f) |
+| ![v0.5.0 视频下载页面](https://github.com/user-attachments/assets/958325d6-4936-4666-90c9-1cc3be7ecdd7) | ![v0.5.0 音视频转换工具箱](https://github.com/user-attachments/assets/dba53fd8-bce0-4778-9f83-0b2c162ff593) | ![v0.5.0 下载历史](https://github.com/user-attachments/assets/d9de48d1-44a1-4f9e-b455-0ded06c31800) |
 
-| 深色界面 | 应用设置 | 转换完成 |
+| 深色界面 | 应用设置 | 音频转换 |
 | :---: | :---: | :---: |
-| ![BBDroid 深色玻璃界面](https://github.com/user-attachments/assets/a72af0fe-1b5c-4bf5-af16-709a68d213af) | ![BBDroid 设置](https://github.com/user-attachments/assets/155f2bb9-c6e0-4b5c-af68-a91bdb9b3510) | ![BBDroid 成功转换 MP3 后的保存与分享入口](https://github.com/user-attachments/assets/80301042-3634-48f3-bfd1-d91275e0a4c1) |
+| ![v0.5.0 深色玻璃界面](https://github.com/user-attachments/assets/61f23fda-2b66-4cca-87e5-291034e08b38) | ![v0.5.0 应用设置](https://github.com/user-attachments/assets/c06749f5-a3d3-4663-83c1-944a7d8dcc6d) | ![v0.5.0 MP3 输出与音频参数](https://github.com/user-attachments/assets/da4e11e9-261c-43cc-a6ea-11b8f8e822b6) |
 
 ## 功能亮点
 

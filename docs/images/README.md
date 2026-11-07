@@ -1,12 +1,16 @@
 # README 图片素材
 
+当前 README 的海报和全部截图已统一为 [v0.5.0 图片素材](v0.5.0/README.md)。新版文件、来源、APK 校验值与生成提示词均保存在 `v0.5.0/`。下列内容为此前图片的来源记录，供历史查阅。
+
+## 历史素材
+
 - `score-input.png`：v0.5.0 正式签名包在 Android 14 模拟器运行的实际鼓谱入口截图。
 - `score-preview.png`、`score-layout.png`：v0.5.0 的鼓谱原生界面截图，由 Android Compose 测试捕获。预览 PDF 为自绘合成测试谱面，只验证界面、翻页、改排与保存，不是实际曲谱质量展示。
 
 - `download.png`、`toolbox.png`、`history.png`、`dark.png`、`settings.png`、`conversion-done.png`：v0.4.0 代码通过 Android 仪器测试从 `com.bbdroid.app` 真实运行界面截取，原始尺寸 1080 × 2400。模拟器为 Android 14 x86_64；其中转换结果为实际生成并保存的 MP3。
 - `bbdroid-poster.png`：沿用上一版的宣传海报，使用内置 imagegen 工具生成，合成素材为当时的下载页与工具箱截图。当前版本界面以本目录独立截图为准。
 
-## 海报生成提示词
+## 旧版海报生成提示词
 
 ```text
 Use case: ads-marketing.
