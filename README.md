@@ -1,5 +1,3 @@
-<div align="center">
-
 # BBDroid
 
 **下载、转码，一站完成。**
@@ -12,7 +10,17 @@ B 站视频下载器 + FFmpeg 工具箱，把视频保存、格式转换和文�
 
 ![BBDroid 宣传海报：下载、转码，一站完成，展示下载页与 FFmpeg 工具箱](docs/images/bbdroid-poster.png)
 
-</div>
+## 界面预览
+
+以下为 v0.4.0 代码的真实运行截图，采集于 Android 14 模拟器。顶部宣传海报沿用上一版素材。
+
+| 视频下载 | FFmpeg 工具箱 | 下载历史 |
+| :---: | :---: | :---: |
+| ![BBDroid 下载页面真实截图](docs/images/download.png) | ![BBDroid 工具箱页面真实截图](docs/images/toolbox.png) | ![BBDroid 历史页面真实截图](docs/images/history.png) |
+
+| 深色界面 | 应用设置 | 转换完成 |
+| :---: | :---: | :---: |
+| ![BBDroid 深色玻璃界面](docs/images/dark.png) | ![BBDroid 设置](docs/images/settings.png) | ![BBDroid 成功转换 MP3 后的保存与分享入口](docs/images/conversion-done.png) |
 
 ## 功能亮点
 
@@ -51,30 +59,6 @@ v0.4.0 修复了音频转换、输出类型和取消下载等问题，并重新�
 - **自定义保存位置**：默认视频、音频、图片分别保存到 `Download/BBDroid/视频/`、`Download/BBDroid/音频/`、`Download/BBDroid/图片/`，也可在设置中选择文件夹。
 - **附赠文件独立保存**：Android 10 及以上将封面、弹幕和字幕写入 `Download/BBDroid/附赠/`。
 - **按习惯选择外观**：浅色、深色、跟随系统，以及可调强度的玻璃主题；以冷白、银灰和蓝色搭配柔和背景模糊与边缘高光。
-
-## 界面预览
-
-以下为 v0.4.0 代码的真实运行截图，采集于 Android 14 模拟器。顶部宣传海报沿用上一版素材。
-
-<table>
-  <tr>
-    <th align="center">视频下载</th>
-    <th align="center">FFmpeg 工具箱</th>
-    <th align="center">下载历史</th>
-  </tr>
-  <tr>
-    <td width="33%"><img src="docs/images/download.png" alt="BBDroid 下载页面真实截图" width="280"></td>
-    <td width="33%"><img src="docs/images/toolbox.png" alt="BBDroid 工具箱页面真实截图" width="280"></td>
-    <td width="33%"><img src="docs/images/history.png" alt="BBDroid 历史页面真实截图" width="280"></td>
-  </tr>
-</table>
-
-<details>
-<summary>深色界面、设置与转换结果</summary>
-
-<img src="docs/images/dark.png" alt="BBDroid 深色玻璃界面" width="260"> <img src="docs/images/settings.png" alt="BBDroid 设置" width="260"> <img src="docs/images/conversion-done.png" alt="BBDroid 成功转换 MP3 后的保存与分享入口" width="260">
-
-</details>
 
 ## 快速上手
 
