@@ -8,7 +8,7 @@ B 站视频下载器 + FFmpeg 工具箱，把视频保存、格式转换和文�
 
 **v0.4.0 · Android 7.0+ · 64 位 ARM / x86 · Kotlin · Jetpack Compose · FFmpeg**
 
-![BBDroid 宣传海报：下载、转码，一站完成，展示下载页与 FFmpeg 工具箱](docs/images/bbdroid-poster.png)
+![BBDroid 宣传海报：下载、转码，一站完成，展示下载页与 FFmpeg 工具箱](https://github.com/user-attachments/assets/8bbe8615-cdd3-41e1-a198-e07bbb2c04e6)
 
 ## 界面预览
 
@@ -16,11 +16,11 @@ B 站视频下载器 + FFmpeg 工具箱，把视频保存、格式转换和文�
 
 | 视频下载 | FFmpeg 工具箱 | 下载历史 |
 | :---: | :---: | :---: |
-| ![BBDroid 下载页面真实截图](docs/images/download.png) | ![BBDroid 工具箱页面真实截图](docs/images/toolbox.png) | ![BBDroid 历史页面真实截图](docs/images/history.png) |
+| ![BBDroid 下载页面真实截图](https://github.com/user-attachments/assets/c33d82e2-9af6-4bcf-8d98-da789e0101d4) | ![BBDroid 工具箱页面真实截图](https://github.com/user-attachments/assets/09b684be-3c78-4c3f-85f6-41392d00f9b4) | ![BBDroid 历史页面真实截图](https://github.com/user-attachments/assets/66a06caf-6881-4283-96ec-15654b66bd8f) |
 
 | 深色界面 | 应用设置 | 转换完成 |
 | :---: | :---: | :---: |
-| ![BBDroid 深色玻璃界面](docs/images/dark.png) | ![BBDroid 设置](docs/images/settings.png) | ![BBDroid 成功转换 MP3 后的保存与分享入口](docs/images/conversion-done.png) |
+| ![BBDroid 深色玻璃界面](https://github.com/user-attachments/assets/a72af0fe-1b5c-4bf5-af16-709a68d213af) | ![BBDroid 设置](https://github.com/user-attachments/assets/155f2bb9-c6e0-4b5c-af68-a91bdb9b3510) | ![BBDroid 成功转换 MP3 后的保存与分享入口](https://github.com/user-attachments/assets/80301042-3634-48f3-bfd1-d91275e0a4c1) |
 
 ## 功能亮点
 
