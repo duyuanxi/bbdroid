@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.*
 private data class Backdrop(val size: Size = Size.Zero, val dark: Boolean = false)
 private val LocalBackdrop = staticCompositionLocalOf { Backdrop() }
 
+enum class AppCardTone { REFRACTED, NEUTRAL }
+
 @Composable
 fun GlassSceneHost(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     var dimensions by remember { mutableStateOf(IntSize.Zero) }
@@ -56,7 +58,12 @@ private fun DrawScope.drawBackdrop(scene: Backdrop) {
 }
 
 @Composable
-fun AppCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+fun AppCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    tone: AppCardTone = AppCardTone.REFRACTED,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val backdrop = LocalBackdrop.current
     val enabled = LocalGlassEnabled.current
     val intensity = LocalGlassIntensity.current
@@ -77,8 +84,16 @@ fun AppCard(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, conten
                 translate(-offset.x, -offset.y) { drawBackdrop(backdrop) }
             }
             val fill = if (backdrop.dark) Color(0xFF152638) else Color.White
+            val topAlpha = when (tone) {
+                AppCardTone.REFRACTED -> 0.48f + intensity * 0.23f
+                AppCardTone.NEUTRAL -> if (backdrop.dark) 0.88f else 0.91f
+            }
+            val bottomAlpha = when (tone) {
+                AppCardTone.REFRACTED -> 0.25f + intensity * 0.28f
+                AppCardTone.NEUTRAL -> if (backdrop.dark) 0.80f else 0.82f
+            }
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(
-                fill.copy(alpha = 0.48f + intensity * 0.23f), fill.copy(alpha = 0.25f + intensity * 0.28f)))))
+                fill.copy(alpha = topAlpha), fill.copy(alpha = bottomAlpha)))))
         } else Box(Modifier.matchParentSize().background(base))
         Column(Modifier.fillMaxWidth(), content = content)
     }

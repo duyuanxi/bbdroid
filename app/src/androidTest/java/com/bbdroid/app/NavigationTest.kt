@@ -1,6 +1,7 @@
 package com.bbdroid.app
 
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -95,6 +96,38 @@ class NavigationTest {
         tab("历史").assertIsSelected()
         tab("工具箱").performClick()
         ui.onNode(hasText("https://www.bilibili.com/video/BV1qt4y1X7TW?p=3") and hasText("B站鼓谱链接 / BV 号")).assertIsDisplayed()
+    }
+    @Test fun historyCardsShowNeutralMissingFileState() {
+        val timestamp = System.currentTimeMillis()
+        val existingFile = File(context.cacheDir, "history-card-present-$timestamp.mp4").apply { writeBytes(byteArrayOf(0)) }
+        val present = History.Item(
+            title = "已保存的视频",
+            cover = "",
+            quality = "1080P",
+            size = existingFile.length(),
+            path = existingFile.path,
+            time = timestamp,
+            uri = Uri.fromFile(existingFile).toString(),
+        )
+        val missing = History.Item(
+            title = "已移除的视频",
+            cover = "",
+            quality = "720P",
+            time = timestamp + 1,
+            uri = Uri.fromFile(File(context.cacheDir, "history-card-missing-$timestamp.mp4")).toString(),
+        )
+        runBlocking { History.add(context, present); History.add(context, missing) }
+        try {
+            tab("历史").performClick()
+            ui.waitUntil(10_000) { ui.onAllNodesWithText("文件已从本机移除").fetchSemanticsNodes().isNotEmpty() }
+            ui.onNodeWithText("已保存的视频").assertIsDisplayed()
+            ui.onNodeWithText("已移除的视频").assertIsDisplayed()
+            ui.onNodeWithText("文件已从本机移除").assertIsDisplayed()
+            screenshot("history-records")
+        } finally {
+            runBlocking { History.remove(context, present); History.remove(context, missing) }
+            existingFile.delete()
+        }
     }
     private fun screenshot(name: String) {
         ui.mainClock.advanceTimeBy(300)
