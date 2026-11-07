@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
@@ -34,7 +35,13 @@ object ToolboxImport {
     var path by mutableStateOf("")
     var name by mutableStateOf("")
     var id by mutableStateOf(0)
-    fun request(p: String, n: String) { path = p; name = n; id++ }
+    fun request(p: String, n: String) { path = p; name = n; id++; ToolboxDestination.open(0) }
+}
+
+object ToolboxDestination {
+    var id by mutableIntStateOf(0)
+    var tool by mutableIntStateOf(0)
+    fun open(index: Int) { tool = index; id++ }
 }
 
 data class ProbeInfo(val fileName: String = "", val container: String = "", val videoCodec: String = "",
@@ -83,6 +90,26 @@ private fun ParameterSection(title: String, summary: String, content: @Composabl
 
 @Composable
 fun ToolboxTab(context: Context, modifier: Modifier = Modifier) {
+    var tool by rememberSaveable { mutableIntStateOf(0) }
+    var handledDestination by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(ToolboxDestination.id) {
+        if (ToolboxDestination.id > handledDestination) { tool = ToolboxDestination.tool; handledDestination = ToolboxDestination.id }
+    }
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(tool == 0, { tool = 0 }, { Text("音视频转换") }, leadingIcon = { Icon(Icons.Outlined.SwapHoriz, null) })
+            FilterChip(tool == 1, { tool = 1 }, { Text("鼓谱 PDF") }, leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, null) })
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            fun panel(index: Int) = (if (tool == index) Modifier.fillMaxSize() else Modifier.size(0.dp)).clipToBounds()
+            ConversionToolboxTab(context, panel(0))
+            com.bbdroid.app.drum.ScorePanel(context, panel(1))
+        }
+    }
+}
+
+@Composable
+private fun ConversionToolboxTab(context: Context, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     var inputPath by rememberSaveable { mutableStateOf("") }
     var inputName by rememberSaveable { mutableStateOf("") }

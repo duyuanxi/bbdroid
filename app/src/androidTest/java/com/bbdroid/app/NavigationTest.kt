@@ -28,6 +28,10 @@ class NavigationTest {
             ToolboxImport.path = ""
             ToolboxImport.name = ""
             ToolboxImport.id = 0
+            com.bbdroid.app.drum.ScoreImport.id = 0
+            com.bbdroid.app.drum.ScoreImport.source = ""
+            ToolboxDestination.id = 0
+            ToolboxDestination.tool = 0
             ToolboxSession.outputState.value = null
             ToolboxSession.statusState.value = ""
         }
@@ -73,6 +77,24 @@ class NavigationTest {
         ui.waitForIdle()
         ui.onNodeWithText("解析视频").assertIsDisplayed()
         screenshot("dark")
+    }
+    @Test fun downloadLinkOpensScoreToolWithoutLosingConversion() {
+        ui.onNodeWithText("链接 / BV 号 / av 号").performTextInput("https://www.bilibili.com/video/BV1qt4y1X7TW?p=2")
+        ui.onNodeWithText("将链接整理为鼓谱 PDF").performClick()
+        ui.onNodeWithText("把鼓谱带到谱架上").assertIsDisplayed()
+        ui.onNode(hasText("https://www.bilibili.com/video/BV1qt4y1X7TW?p=2") and hasText("B站鼓谱链接 / BV 号")).assertIsDisplayed()
+        ui.onNodeWithText("音视频转换").performClick()
+        ui.onNodeWithText("开始转换").assertExists()
+    }
+    @Test fun recreationKeepsEditedScoreLinkAndSelectedPage() {
+        ui.onNodeWithText("链接 / BV 号 / av 号").performTextInput("BV1qt4y1X7TW")
+        ui.onNodeWithText("将链接整理为鼓谱 PDF").performClick()
+        ui.onNodeWithText("B站鼓谱链接 / BV 号").performTextReplacement("https://www.bilibili.com/video/BV1qt4y1X7TW?p=3")
+        tab("历史").performClick()
+        ui.activityRule.scenario.recreate()
+        tab("历史").assertIsSelected()
+        tab("工具箱").performClick()
+        ui.onNode(hasText("https://www.bilibili.com/video/BV1qt4y1X7TW?p=3") and hasText("B站鼓谱链接 / BV 号")).assertIsDisplayed()
     }
     private fun screenshot(name: String) {
         ui.mainClock.advanceTimeBy(300)

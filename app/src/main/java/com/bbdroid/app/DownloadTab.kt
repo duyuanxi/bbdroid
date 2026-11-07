@@ -416,6 +416,9 @@ fun DownloadTab(context: Context, modifier: Modifier = Modifier) {
                 }, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(18.dp)) {
                     Text(if (biliRunning) "停止解析" else "解析视频")
                 }
+                TextButton(onClick = { keyboardController?.hide(); com.bbdroid.app.drum.ScoreImport.request(biliInput) }, enabled = biliInput.isNotBlank()) {
+                    Text("将链接整理为鼓谱 PDF")
+                }
             }
         }
 

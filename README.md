@@ -2,17 +2,23 @@
 
 **下载、转码，一站完成。**
 
-B 站视频下载器 + FFmpeg 工具箱，把视频保存、格式转换和文件管理装进一个 Android 应用。
+B 站视频下载器 + FFmpeg 工具箱 + 在线鼓谱 PDF，把视频保存、格式转换、鼓谱整理和文件管理装进一个 Android 应用。
 
 [下载 APK](https://github.com/duyuanxi/bbdroid/releases/latest) · [功能亮点](#功能亮点) · [界面预览](#界面预览) · [快速上手](#快速上手) · [源码构建](#源码构建)
 
-**v0.4.0 · Android 7.0+ · 64 位 ARM / x86 · Kotlin · Jetpack Compose · FFmpeg**
+**v0.5.0 · Android 7.0+ · 64 位 ARM / x86 · Kotlin · Jetpack Compose · FFmpeg**
 
 ![BBDroid 宣传海报：下载、转码，一站完成，展示下载页与 FFmpeg 工具箱](https://github.com/user-attachments/assets/8bbe8615-cdd3-41e1-a198-e07bbb2c04e6)
 
 ## 界面预览
 
 以下为 v0.4.0 代码的真实运行截图，采集于 Android 14 模拟器。顶部宣传海报沿用上一版素材。
+
+v0.5.0 新增鼓谱界面与 PDF 预览，使用自绘合成谱面验证，不是原曲谱面质量样例：
+
+| 鼓谱输入 | 分页预览 | 重新排版 |
+| :---: | :---: | :---: |
+| ![鼓谱链接与选项输入](https://raw.githubusercontent.com/duyuanxi/bbdroid/v0.5.0/docs/images/score-input.png) | ![原生 PDF 分页预览](https://raw.githubusercontent.com/duyuanxi/bbdroid/v0.5.0/docs/images/score-preview.png) | ![A5 打印预览](https://raw.githubusercontent.com/duyuanxi/bbdroid/v0.5.0/docs/images/score-layout.png) |
 
 | 视频下载 | FFmpeg 工具箱 | 下载历史 |
 | :---: | :---: | :---: |
@@ -24,7 +30,7 @@ B 站视频下载器 + FFmpeg 工具箱，把视频保存、格式转换和文�
 
 ## 功能亮点
 
-v0.4.0 修复了音频转换、输出类型和取消下载等问题，并重新设计了浅色与深色玻璃界面。详见 [更新记录](CHANGELOG.md) 与 [验证记录](docs/verification-v0.4.0.md)。
+v0.5.0 新增在线鼓谱整理与 PDF 预览、排版、保存功能，保留 v0.4.0 的转换修复和玻璃界面。详见 [更新记录](CHANGELOG.md)、[鼓谱接入说明](docs/drum-score.md) 与 [验证记录](docs/verification-v0.5.0.md)。
 
 ### 喜欢的内容，一次保存
 
@@ -62,7 +68,21 @@ v0.4.0 修复了音频转换、输出类型和取消下载等问题，并重新�
 
 ## 快速上手
 
-1. 前往 [Releases](https://github.com/duyuanxi/bbdroid/releases/latest)，下载 `BBDroid-v0.4.0.apk` 并安装。支持 Android 7.0（API 24）及以上的 **64 位**设备（`arm64-v8a` / `x86_64`）。沿用 BBDroid 原签名，可直接覆盖升级。
+### 滚动鼓谱 → 打印 PDF
+
+工具箱选择「鼓谱 PDF」，或在下载页输入链接后选择「将链接整理为鼓谱 PDF」。功能接入 [kenqia/bilibili-drum-score-to-pdf](https://github.com/kenqia/bilibili-drum-score-to-pdf) 的 [公开在线服务](https://drum.kenqia.top/)，需要联网。
+
+- BV 号、分享文案、短链接及分 P；可设置时间选段和手动谱区。
+- 查看排队与处理阶段，支持取消、重试、最近十个任务与完整任务链接恢复。
+- 原生渲染 PDF，支持逐页查看、放大及 A4 / A3 / A5 重新排版。
+- 改排失败保留旧版；可恢复默认排版，保存到 `Download/BBDroid/鼓谱/` 或自定义目录，再打开、分享。
+- 提交公开链接与选项，不向鼓谱服务发送 BBDroid 的 B站登录 Cookie。任务访问凭据保存在应用私有且不参与备份的目录。
+
+服务适用于 10 分钟以内的公开视频、白底纵向滚动鼓谱，结果通常保留 24 小时；保存到本机的 PDF 不受服务期限影响。自动拼接不等于音乐校对，打印前请逐页核对。本次接入在线产品，本地视频 CLI 和 AI Agent Skill 的能力未移植到 Android。许可与实现边界见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+
+### 下载与转换
+
+1. 前往 [Releases](https://github.com/duyuanxi/bbdroid/releases/latest)，下载 `BBDroid-v0.5.0.apk` 并安装。支持 Android 7.0（API 24）及以上的 **64 位**设备（`arm64-v8a` / `x86_64`）。沿用 BBDroid 原签名，可直接覆盖升级。
 2. 打开下载页，粘贴 B 站视频链接、BV 号或 av 号并解析。需要账号权限的内容先在设置中登录。
 3. 选择分 P、画质、编码及附赠内容，下载单条视频或加入批量队列。
 4. 完成后打开或分享文件；需要调整格式、体积或片段时，选择「导入转码」。
@@ -128,6 +148,7 @@ app/src/main/java/com/bbdroid/app/
 ├── Downloader.kt         # 音视频下载、合并与附赠内容
 ├── ToolboxTab.kt         # 文件导入、转码参数与媒体信息
 ├── ToolboxSession.kt     # 跨页面保存的转换任务与取消控制
+├── drum/                 # 在线鼓谱任务、接口、PDF 预览与保存
 ├── FfmpegOptions.kt      # 输出格式、编码与命令构建
 ├── FFmpegEngine.kt       # FFmpeg 引擎调用
 ├── HistoryTab.kt         # 下载历史、打开与分享

@@ -22,6 +22,7 @@ object Storage {
 
     fun saveVideoDefault(context: Context, file: File, displayName: String): SavedFile {
         val category = when {
+            mimeOf(displayName) == "application/pdf" -> "鼓谱"
             mimeOf(displayName).startsWith("audio/") -> "音频"
             mimeOf(displayName).startsWith("image/") -> "图片"
             else -> "视频"
@@ -49,6 +50,9 @@ object Storage {
             saveVideoDefault(context, file, displayName)
         }
     }
+
+    suspend fun saveDocument(context: Context, file: File, displayName: String): SavedFile =
+        saveVideo(context, file, displayName)
 
     private fun savePublic(context: Context, source: File, name: String, directory: String, subfolder: String): SavedFile {
         require(source.isFile && source.length() > 0) { "输出文件不存在或为空" }
@@ -87,6 +91,7 @@ object Storage {
     }
 
     internal fun mimeOf(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
+        "pdf" -> "application/pdf"
         "mp4", "m4v" -> "video/mp4"
         "mkv" -> "video/x-matroska"
         "mov" -> "video/quicktime"

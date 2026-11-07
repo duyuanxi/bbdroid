@@ -53,7 +53,10 @@ fun MainScreen(context: Context) {
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) { if (Build.VERSION.SDK_INT < 29) permission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) }
     LaunchedEffect(ReDownloadRequest.id) { if (ReDownloadRequest.id > 0) selectedTab = 0 }
-    LaunchedEffect(ToolboxImport.id) { if (ToolboxImport.id > 0) selectedTab = 1 }
+    var handledToolDestination by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(ToolboxDestination.id) {
+        if (ToolboxDestination.id > handledToolDestination) { focus.clearFocus(); selectedTab = 1; handledToolDestination = ToolboxDestination.id }
+    }
     GlassSceneHost(Modifier.fillMaxSize()) {
         Scaffold(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
