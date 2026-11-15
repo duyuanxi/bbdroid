@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -109,7 +110,8 @@ private fun FloatingNavigation(selected: Int, onSelect: (Int) -> Unit) {
                 names.forEachIndexed { index, text ->
                     val tint by animateColorAsState(if (selected == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, animationSpec = appSpring(), label = "navTint")
                     Column(Modifier.weight(1f).clip(RoundedCornerShape(24.dp))
-                        .selectable(selected == index, role = Role.Tab, onClick = { onSelect(index) }).padding(vertical = 10.dp),
+                        .selectable(selected = selected == index, interactionSource = remember { MutableInteractionSource() },
+                            indication = null, role = Role.Tab, onClick = { onSelect(index) }).padding(vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Icon(icons[index], null, Modifier.size(23.dp), tint)
                         Text(text, fontSize = 11.sp, color = tint)
