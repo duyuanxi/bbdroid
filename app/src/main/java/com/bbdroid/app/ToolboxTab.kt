@@ -6,6 +6,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -84,7 +88,7 @@ private fun ParameterSection(title: String, summary: String, content: @Composabl
             }
             Icon(if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if (expanded) "收起$title" else "展开$title")
         }
-        AnimatedVisibility(expanded) { Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content) }
+        AnimatedVisibility(expanded, enter = expandVertically(animationSpec = appSpring()) + fadeIn(animationSpec = appSpring()), exit = shrinkVertically(animationSpec = appSpring()) + fadeOut(animationSpec = appSpring())) { Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp), content = content) }
     }
 }
 

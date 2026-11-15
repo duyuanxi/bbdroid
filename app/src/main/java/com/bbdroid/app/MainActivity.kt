@@ -11,7 +11,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
@@ -103,12 +102,12 @@ private fun FloatingNavigation(selected: Int, onSelect: (Int) -> Unit) {
     AppCard(Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(7.dp)) {
             val slot = (maxWidth - 8.dp) / 3
-            val offset by animateDpAsState((slot + 4.dp) * selected, spring(dampingRatio = 0.83f, stiffness = 450f), label = "navPosition")
+            val offset by animateDpAsState((slot + 4.dp) * selected, appSpring(), label = "navPosition")
             Box(Modifier.matchParentSize().padding(end = maxWidth - slot).offset(x = offset).clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.11f)))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 names.forEachIndexed { index, text ->
-                    val tint by animateColorAsState(if (selected == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, label = "navTint")
+                    val tint by animateColorAsState(if (selected == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, animationSpec = appSpring(), label = "navTint")
                     Column(Modifier.weight(1f).clip(RoundedCornerShape(24.dp))
                         .selectable(selected == index, role = Role.Tab, onClick = { onSelect(index) }).padding(vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {

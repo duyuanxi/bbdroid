@@ -2,6 +2,8 @@ package com.bbdroid.app
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
@@ -12,6 +14,9 @@ val LocalGlassEnabled = staticCompositionLocalOf { true }
 val LocalGlassIntensity = staticCompositionLocalOf { 0.5f }
 val LocalGlassDark = staticCompositionLocalOf { false }
 val StandardEasing: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+// Compose 使用归一化质量；阻尼比 = 18 / (2 * sqrt(1 * 120))。
+fun <T> appSpring(): SpringSpec<T> = spring(dampingRatio = 0.8215838f, stiffness = 120f)
 
 @Composable
 fun BbdroidTheme(mode: ThemeMode = ThemeMode.SYSTEM, glass: GlassConfig = GlassConfig(), content: @Composable () -> Unit) {
